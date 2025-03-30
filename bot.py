@@ -48,10 +48,14 @@ import unicodedata
 import openai
 from openai import OpenAI
 
+# Añadir estas variables globales al inicio del archivo, después de las variables globales existentes
+maintenance_mode = False  # Variable para controlar el estado de mantenimiento
+maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
+
 # BoT Configuration Variables
 api_id = 13876032
 api_hash = "c87c88faace9139628f6c7ffc2662bff"
-bot_token = "7739544756:AAG165XsEazXFD_6pqfXS58g-eDITg0DJ8s"
+bot_token = "7716154596:AAFy5dMzQEithATmAM53BTQhfCY6xGl2Gw0"
 downlist = {} #lista de archivos descargados
 root = {} #directorio actua
 id_path = {}
@@ -60,10 +64,8 @@ cancel_uploads = {}
 cancel_upload = {} 
 bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-
-USERS = ["JAGB2021", "JAGB2021"]
-ADM = ["Stvz20", "JAGB2021"]
-
+USERS = ["elianosvaldo23"]
+ADM = ["elianosvaldo23"]
 
 async def create_db_connection():
     return await aiomysql.connect(host=db_host, port=3306, user=db_user, password=db_password, db=db_name)
@@ -430,6 +432,29 @@ from pyrogram.errors import UserNotParticipant
 
 # ID del canal al que los usuarios deben unirse
 CANAL_ID = -1001565407969  # Reemplaza con el ID de tu canal
+
+# Añadir estas funciones después de la definición de `handle_message` (aproximadamente en la línea 494)
+@bot.on_message(filters.command("mant") & filters.user(ADM))
+async def enable_maintenance(client, message):
+    global maintenance_mode
+    maintenance_mode = True
+    for user in downlist.keys():
+        try:
+            await bot.send_message(user, maintenance_message)
+        except Exception:
+            pass
+    await message.reply("🔧 El bot ahora está en modo mantenimiento. Solo los administradores pueden usarlo.")
+
+@bot.on_message(filters.command("mantoff") & filters.user(ADM))
+async def disable_maintenance(client, message):
+    global maintenance_mode
+    maintenance_mode = False
+    for user in downlist.keys():
+        try:
+            await bot.send_message(user, "✅ El bot ya no está en mantenimiento. Puedes usarlo con normalidad.")
+        except Exception:
+            pass
+    await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
 @bot.on_message(filters.private)
 async def handle_message(client, message):
@@ -987,19 +1012,18 @@ async def download_and_send(client, message, url, path):
         print(e)
         await message.reply_text(e)
 
-# Manejador para el botón de enlace de referencia
-@bot.on_callback_query(filters.regex(r"^get_referral_link$"))
-async def get_referral_link(client, callback_query):
-    user_id = callback_query.from_user.id
-    referral_link = f"https://t.me/UploadFreeFile_bot?start={user_id}"
-    await callback_query.answer(f"Tu enlace de referencia es: {referral_link}", show_alert=True)
-    await bot.send_message(
-        user_id,
-        "🎉 **¡Gana 50 MB adicionales por cada usuario nuevo que refieras!** 🎉\n\n"
-        "Comparte tu enlace de referencia con tus amigos y por cada persona que se una usando tu enlace, recibirás **50 MB adicionales** de espacio de subida diaria.\n\n"
-        f"🔗 **Tu enlace de referencia es:**\n`{referral_link}`\n\n"
-        "¡Comienza a compartir y gana más espacio! 🚀"
-    )
+# Modificar la función `handle_message` para verificar el estado de mantenimiento (aproximadamente en la línea 494)
+@bot.on_message(filters.private)
+async def handle_message(client, message):
+    global maintenance_mode
+    user_id = message.from_user.id
+    username = message.from_user.username or str(user_id)
+    mss = message.text
+
+    # Verificar si el bot está en mantenimiento
+    if maintenance_mode and username not in ADM:
+        await message.reply(maintenance_message)
+        return
 
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()  
