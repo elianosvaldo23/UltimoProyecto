@@ -1065,10 +1065,10 @@ async def enable_maintenance(client, message):
 
 @bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
-    if message.from_user.id != ADMIN_ID:
+    if message.from_user.id != 1742433244:  # ID del admin
         await message.reply("❌ No tienes permiso para usar este comando.")
         return
-    
+
     try:
         args = message.text.split()
         if len(args) != 4:
@@ -1093,6 +1093,9 @@ async def add_permission(client, message):
         
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
+
+# Agregar el manejador del comando
+bot.add_handler(CallbackQueryHandler(handle_callback_query))
 
 @bot.on_message(filters.command("mantoff"))
 async def disable_maintenance(client, message):
