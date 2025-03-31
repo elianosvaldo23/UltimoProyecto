@@ -1027,6 +1027,9 @@ async def handle_message(client, message):
 
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()  
-bot.send_message(5416296262,'**BoT Iniciado preiona /start y disfruta de tu estadia**')
-print("Bot  Iniciado")
+try:
+    bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
+except Exception as e:
+    print(f"No se pudo enviar el mensaje inicial: {e}")
+print("Bot Iniciado")
 bot.loop.run_forever()
