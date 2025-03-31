@@ -52,6 +52,7 @@ from openai import OpenAI
 maintenance_mode = False
 maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
 ADMIN_ID = 1742433244  # ID del administrador principal
+ADM = [1742433244]    # Lista de IDs de administradores
 user_permissions = {}  # Diccionario para almacenar permisos de usuarios
 
 # BoT Configuration Variables
@@ -783,7 +784,7 @@ async def handle_message(client, message):
         
         
     elif message.text.startswith('/data'):
-        if username != 'Stvz20' and username != 'JAGB2021':
+        if message.from_user.id != 1742433244:  # Verificar directamente con el ID
             msg = await bot.send_message(username, 'No puedes usar este comando')
             return
         else:pass
@@ -1146,7 +1147,7 @@ async def handle_message(client, message):
 
 @bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
-    if message.from_user.id != ADMIN_ID:
+    if message.from_user.id != 1742433244:  # Verificar directamente con el ID numérico
         await message.reply("❌ No tienes permiso para usar este comando.")
         return
     
@@ -1160,13 +1161,11 @@ async def add_permission(client, message):
         dias = int(args[2])
         gb_limit = float(args[3].replace("gb", ""))
         
-        # Calcular fecha de expiración
         expiry_date = datetime.now() + timedelta(days=dias)
         
-        # Guardar permisos del usuario
         user_permissions[user_id] = {
             "expiry_date": expiry_date,
-            "gb_limit": gb_limit * 1024 * 1024 * 1024,  # Convertir GB a bytes
+            "gb_limit": gb_limit * 1024 * 1024 * 1024,
             "gb_used": 0
         }
         
