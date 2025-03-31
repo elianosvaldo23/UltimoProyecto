@@ -1065,6 +1065,11 @@ async def enable_maintenance(client, message):
 
 @bot.on_message(filters.command("permiso") & filters.user(ADM))
 async def add_permission(client, message):
+    if message.from_user.id not in ADM:
+        await message.reply("❌ No tienes permiso para usar este comando.")
+        return
+    
+    # Resto del código...
     try:
         args = message.text.split()
         if len(args) != 4:
