@@ -1065,7 +1065,7 @@ async def enable_maintenance(client, message):
 
 @bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
-    if message.from_user.id != 1742433244:  # ID del admin
+    if message.from_user.id not in ADM:  # Verificación de permisos
         await message.reply("❌ No tienes permiso para usar este comando.")
         return
 
