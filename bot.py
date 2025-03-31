@@ -1063,12 +1063,8 @@ async def enable_maintenance(client, message):
             pass
     await message.reply("🔧 El bot ahora está en modo mantenimiento. Solo los administradores pueden usarlo.")
 
-@bot.on_message(filters.command("permiso"))
+@bot.on_message(filters.command("permiso") & filters.user(ADM))
 async def add_permission(client, message):
-    if message.from_user.id not in ADM:  # Verificación de permisos
-        await message.reply("❌ No tienes permiso para usar este comando.")
-        return
-
     try:
         args = message.text.split()
         if len(args) != 4:
@@ -1093,6 +1089,7 @@ async def add_permission(client, message):
         
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
+        print(f"Error: {str(e)}")  # Agregar registro de error en la consola
 
 # Agregar el manejador del comando
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
