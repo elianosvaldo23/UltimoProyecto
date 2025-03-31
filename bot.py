@@ -48,9 +48,11 @@ import unicodedata
 import openai
 from openai import OpenAI
 
-# Añadir estas variables globales al inicio del archivo, después de las variables globales existentes
-maintenance_mode = False  # Variable para controlar el estado de mantenimiento
+# Variables globales
+maintenance_mode = False
 maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
+ADMIN_ID = 1742433244  # ID del administrador principal
+user_permissions = {}  # Diccionario para almacenar permisos de usuarios
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -459,6 +461,35 @@ async def disable_maintenance(client, message):
 @bot.on_message(filters.private)
 async def handle_message(client, message):
     user_id = message.from_user.id
+    
+    # Permitir siempre al admin
+    if user_id == ADMIN_ID:
+        # Procesar mensaje normalmente
+        pass
+    else:
+        # Verificar si el usuario tiene permisos
+        if user_id not in user_permissions:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
+            ])
+            await message.reply_text(
+                "⛔️ No tienes permiso para usar este bot.",
+                reply_markup=keyboard
+            )
+            return
+        
+        # Verificar si los permisos han expirado
+        if datetime.now() > user_permissions[user_id]["expiry_date"]:
+            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
+            return
+        
+        # Verificar límite de GB (solo para comandos de subida)
+        if message.text and message.text.startswith('/up'):
+            if user_permissions[user_id]["gb_used"] >= user_permissions[user_id]["gb_limit"]:
+                await message.reply_text("⚠️ Has alcanzado tu límite de almacenamiento.")
+                return
+    
+    # Continuar con el código original del handle_message
     username = message.from_user.username or str(user_id)
     mss = message.text
         
@@ -828,6 +859,10 @@ async def handle_message(client, message):
         msg = await bot.send_message(username, "Por Favor Espere⏳...")
         await deletecloud(bot, usid, msg, username)
     elif '/up' in mss:
+        for path in selected_files:
+            await upload_rev(bot, path, usid, msg, username)
+            # Añadir esta línea después de cada subida exitosa
+            await update_user_storage(user_id, os.path.getsize(path))
         id_path[username] = {"id": "", "user_id": ""}
         try:
             msg = await bot.send_message(username, "Por Favor Espere⏳...")
@@ -1027,12 +1062,48 @@ async def enable_maintenance(client, message):
             pass
     await message.reply("🔧 El bot ahora está en modo mantenimiento. Solo los administradores pueden usarlo.")
 
+@bot.on_message(filters.command("permiso"))
+async def add_permission(client, message):
+    if message.from_user.id != ADMIN_ID:
+        await message.reply("❌ No tienes permiso para usar este comando.")
+        return
+    
+    try:
+        args = message.text.split()
+        if len(args) != 4:
+            await message.reply("❌ Uso correcto: /permiso user_id dias GB\nEjemplo: /permiso 1234567890 30 5")
+            return
+        
+        user_id = int(args[1])
+        dias = int(args[2])
+        gb_limit = float(args[3].replace("gb", ""))
+        
+        expiry_date = datetime.now() + timedelta(days=dias)
+        
+        user_permissions[user_id] = {
+            "expiry_date": expiry_date,
+            "gb_limit": gb_limit * 1024 * 1024 * 1024,
+            "gb_used": 0
+        }
+        
+        await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
+                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                          f"💾 Límite: {gb_limit}GB")
+        
+    except Exception as e:
+        await message.reply(f"❌ Error: {str(e)}")
+
 @bot.on_message(filters.command("mantoff"))
 async def disable_maintenance(client, message):
     if message.from_user.id not in ADM:
         await message.reply("❌ No tienes permiso para usar este comando.")
         return
         
+        # Añadir aquí la nueva función
+async def update_user_storage(user_id, file_size):
+    if user_id in user_permissions:
+        user_permissions[user_id]["gb_used"] += file_size
+
     global maintenance_mode
     maintenance_mode = False
     for user in downlist.keys():
@@ -1072,3 +1143,36 @@ async def handle_message(client, message):
     if maintenance_mode and user_id not in ADM:
         await message.reply(maintenance_message)
         return
+
+@bot.on_message(filters.command("permiso"))
+async def add_permission(client, message):
+    if message.from_user.id != ADMIN_ID:
+        await message.reply("❌ No tienes permiso para usar este comando.")
+        return
+    
+    try:
+        args = message.text.split()
+        if len(args) != 4:
+            await message.reply("❌ Uso correcto: /permiso user_id dias GB\nEjemplo: /permiso 1234567890 30 5")
+            return
+        
+        user_id = int(args[1])
+        dias = int(args[2])
+        gb_limit = float(args[3].replace("gb", ""))
+        
+        # Calcular fecha de expiración
+        expiry_date = datetime.now() + timedelta(days=dias)
+        
+        # Guardar permisos del usuario
+        user_permissions[user_id] = {
+            "expiry_date": expiry_date,
+            "gb_limit": gb_limit * 1024 * 1024 * 1024,  # Convertir GB a bytes
+            "gb_used": 0
+        }
+        
+        await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
+                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                          f"💾 Límite: {gb_limit}GB")
+        
+    except Exception as e:
+        await message.reply(f"❌ Error: {str(e)}")
