@@ -65,7 +65,7 @@ cancel_upload = {}
 bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 USERS = ["elianosvaldo23"]
-ADM = ["elianosvaldo23"]
+ADM = [1742433244] 
 
 async def create_db_connection():
     return await aiomysql.connect(host=db_host, port=3306, user=db_user, password=db_password, db=db_name)
@@ -1012,18 +1012,35 @@ async def download_and_send(client, message, url, path):
         print(e)
         await message.reply_text(e)
 
-# Modificar la función `handle_message` para verificar el estado de mantenimiento (aproximadamente en la línea 494)
-@bot.on_message(filters.private)
-async def handle_message(client, message):
-    global maintenance_mode
-    user_id = message.from_user.id
-    username = message.from_user.username or str(user_id)
-    mss = message.text
-
-    # Verificar si el bot está en mantenimiento
-    if maintenance_mode and username not in ADM:
-        await message.reply(maintenance_message)
+@bot.on_message(filters.command("mant"))
+async def enable_maintenance(client, message):
+    if message.from_user.id not in ADM:
+        await message.reply("❌ No tienes permiso para usar este comando.")
         return
+        
+    global maintenance_mode
+    maintenance_mode = True
+    for user in downlist.keys():
+        try:
+            await bot.send_message(user, maintenance_message)
+        except Exception:
+            pass
+    await message.reply("🔧 El bot ahora está en modo mantenimiento. Solo los administradores pueden usarlo.")
+
+@bot.on_message(filters.command("mantoff"))
+async def disable_maintenance(client, message):
+    if message.from_user.id not in ADM:
+        await message.reply("❌ No tienes permiso para usar este comando.")
+        return
+        
+    global maintenance_mode
+    maintenance_mode = False
+    for user in downlist.keys():
+        try:
+            await bot.send_message(user, "✅ El bot ya no está en mantenimiento. Puedes usarlo con normalidad.")
+        except Exception:
+            pass
+    await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()  
@@ -1033,3 +1050,25 @@ except Exception as e:
     print(f"No se pudo enviar el mensaje inicial: {e}")
 print("Bot Iniciado")
 bot.loop.run_forever()
+
+@bot.on_message(filters.private)
+async def handle_message(client, message):
+    user_id = message.from_user.id
+    username = message.from_user.username or str(user_id)
+    mss = message.text
+        
+    # Verificar si el usuario está autorizado usando user_id para admins
+    if user_id not in ADM and username not in USERS:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
+        ])
+        await message.reply_text(
+            "Usted no esta autorizado para utilizar este bot:",
+            reply_markup=keyboard
+        )
+        return
+
+    # Verificar si el bot está en mantenimiento
+    if maintenance_mode and user_id not in ADM:
+        await message.reply(maintenance_message)
+        return
