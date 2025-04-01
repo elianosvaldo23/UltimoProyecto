@@ -437,6 +437,7 @@ from pyrogram.errors import UserNotParticipant
 CANAL_ID = -1002534252574  # Reemplaza con el ID de tu canal
 
 @bot.on_message(filters.command("permiso"))
+@bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
     if message.from_user.id not in ADM:
         await message.reply("❌ No tienes permiso para usar este comando.")
@@ -460,9 +461,23 @@ async def add_permission(client, message):
             "gb_used": 0
         }
         
+        # Mensaje para el administrador
         await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
                           f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
                           f"💾 Límite: {gb_limit}GB")
+        
+        # Nuevo: Notificar al usuario
+        try:
+            await bot.send_message(
+                user_id,
+                f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
+                f"📅 Duración: {dias} días\n"
+                f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
+                f"¡Ya puedes empezar a usar el bot! 🚀"
+            )
+        except Exception as e:
+            await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
         
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
