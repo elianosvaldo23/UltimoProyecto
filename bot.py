@@ -518,6 +518,11 @@ async def disable_maintenance(client, message):
 async def handle_message(client, message):
     user_id = message.from_user.id
     
+    # Verificar modo mantenimiento antes de cualquier otra cosa
+    if maintenance_mode and user_id not in ADM:
+        await message.reply_text(maintenance_message)
+        return
+    
     # Permitir siempre al admin
     if user_id == ADMIN_ID:
         # Procesar mensaje normalmente
@@ -1146,25 +1151,3 @@ except Exception as e:
     print(f"No se pudo enviar el mensaje inicial: {e}")
 print("Bot Iniciado")
 bot.loop.run_forever()
-
-@bot.on_message(filters.private)
-async def handle_message(client, message):
-    user_id = message.from_user.id
-    username = message.from_user.username or str(user_id)
-    mss = message.text
-        
-    # Verificar si el usuario está autorizado usando user_id para admins
-    if user_id not in ADM and username not in USERS:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
-        ])
-        await message.reply_text(
-            "Usted no esta autorizado para utilizar este bot:",
-            reply_markup=keyboard
-        )
-        return
-
-    # Verificar si el bot está en mantenimiento
-    if maintenance_mode and user_id not in ADM:
-        await message.reply(maintenance_message)
-        return
