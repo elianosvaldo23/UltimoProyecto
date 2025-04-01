@@ -436,6 +436,37 @@ from pyrogram.errors import UserNotParticipant
 # ID del canal al que los usuarios deben unirse
 CANAL_ID = -1001565407969  # Reemplaza con el ID de tu canal
 
+@bot.on_message(filters.command("permiso"))
+async def add_permission(client, message):
+    if message.from_user.id not in ADM:
+        await message.reply("❌ No tienes permiso para usar este comando.")
+        return
+    
+    try:
+        args = message.text.split()
+        if len(args) != 4:
+            await message.reply("❌ Uso correcto: /permiso user_id dias GB\nEjemplo: /permiso 1234567890 30 5")
+            return
+        
+        user_id = int(args[1])
+        dias = int(args[2])
+        gb_limit = float(args[3].replace("gb", ""))
+        
+        expiry_date = datetime.now() + timedelta(days=dias)
+        
+        user_permissions[user_id] = {
+            "expiry_date": expiry_date,
+            "gb_limit": gb_limit * 1024 * 1024 * 1024,
+            "gb_used": 0
+        }
+        
+        await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
+                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                          f"💾 Límite: {gb_limit}GB")
+        
+    except Exception as e:
+        await message.reply(f"❌ Error: {str(e)}")
+        
 # Añadir estas funciones después de la definición de `handle_message` (aproximadamente en la línea 494)
 @bot.on_message(filters.command("mant") & filters.user(ADM))
 async def enable_maintenance(client, message):
@@ -1113,34 +1144,3 @@ async def handle_message(client, message):
     if maintenance_mode and user_id not in ADM:
         await message.reply(maintenance_message)
         return
-
-@bot.on_message(filters.command("permiso"))
-async def add_permission(client, message):
-    if message.from_user.id != 1742433244:  # Verificar directamente con el ID numérico
-        await message.reply("❌ No tienes permiso para usar este comando.")
-        return
-    
-    try:
-        args = message.text.split()
-        if len(args) != 4:
-            await message.reply("❌ Uso correcto: /permiso user_id dias GB\nEjemplo: /permiso 1234567890 30 5")
-            return
-        
-        user_id = int(args[1])
-        dias = int(args[2])
-        gb_limit = float(args[3].replace("gb", ""))
-        
-        expiry_date = datetime.now() + timedelta(days=dias)
-        
-        user_permissions[user_id] = {
-            "expiry_date": expiry_date,
-            "gb_limit": gb_limit * 1024 * 1024 * 1024,
-            "gb_used": 0
-        }
-        
-        await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
-                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                          f"💾 Límite: {gb_limit}GB")
-        
-    except Exception as e:
-        await message.reply(f"❌ Error: {str(e)}")
