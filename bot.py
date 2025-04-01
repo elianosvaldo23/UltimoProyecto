@@ -434,7 +434,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import UserNotParticipant
 
 # ID del canal al que los usuarios deben unirse
-CANAL_ID = -1001565407969  # Reemplaza con el ID de tu canal
+CANAL_ID = -1002534252574  # Reemplaza con el ID de tu canal
 
 @bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
