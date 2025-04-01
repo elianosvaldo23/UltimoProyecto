@@ -466,6 +466,30 @@ async def add_permission(client, message):
         
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
+
+@bot.on_message(filters.command("unpermiso"))
+async def remove_permission(client, message):
+    if message.from_user.id not in ADM:
+        await message.reply("❌ No tienes permiso para usar este comando.")
+        return
+
+    try:
+        args = message.text.split()
+        if len(args) != 2:
+            await message.reply("❌ Uso correcto: /unpermiso user_id\nEjemplo: /unpermiso 1234567890")
+            return
+
+        user_id = int(args[1])
+
+        if user_id in user_permissions:
+            del user_permissions[user_id]
+            await message.reply(f"✅ Permisos eliminados para el usuario {user_id}.")
+            await bot.send_message(user_id, "❌ Tus permisos han sido revocados por el administrador.")
+        else:
+            await message.reply(f"⚠️ El usuario {user_id} no tiene permisos asignados.")
+
+    except Exception as e:
+        await message.reply(f"❌ Error: {str(e)}")
         
 # Añadir estas funciones después de la definición de `handle_message` (aproximadamente en la línea 494)
 @bot.on_message(filters.command("mant") & filters.user(ADM))
