@@ -437,7 +437,6 @@ from pyrogram.errors import UserNotParticipant
 CANAL_ID = -1002534252574  # Reemplaza con el ID de tu canal
 
 @bot.on_message(filters.command("permiso"))
-@bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
     if message.from_user.id not in ADM:
         await message.reply("❌ No tienes permiso para usar este comando.")
@@ -530,6 +529,7 @@ async def disable_maintenance(client, message):
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
 @bot.on_message(filters.private)
+@bot.on_message(filters.private)
 async def handle_message(client, message):
     user_id = message.from_user.id
     
@@ -539,20 +539,23 @@ async def handle_message(client, message):
         return
     
     # Permitir siempre al admin
-    if user_id == ADMIN_ID:
-        # Procesar mensaje normalmente
-        pass
-    else:
-        # Verificar si el usuario tiene permisos
-        if user_id not in user_permissions:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
-            ])
-            await message.reply_text(
-                "⛔️ No tienes permiso para usar este bot.",
-                reply_markup=keyboard
-            )
+    if user_id in ADM:  # Cambiado de ADMIN_ID a ADM
+        pass  # Los administradores siempre tienen acceso
+    elif user_id in user_permissions:  # Verificar si el usuario tiene permisos
+        # Verificar si los permisos han expirado
+        if datetime.now() > user_permissions[user_id]["expiry_date"]:
+            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
             return
+    else:
+        # Usuario sin permisos
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
+        ])
+        await message.reply_text(
+            "⛔️ No tienes permiso para usar este bot.",
+            reply_markup=keyboard
+        )
+        return
         
         # Verificar si los permisos han expirado
         if datetime.now() > user_permissions[user_id]["expiry_date"]:
