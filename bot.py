@@ -48,7 +48,14 @@ import unicodedata
 import openai
 from openai import OpenAI
 from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime, timedelta
+import logging
+
+# Configuración de logging (opcional pero recomendado)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Variables globales
 maintenance_mode = False
@@ -79,16 +86,65 @@ MONGO_URI = "mongodb+srv://Elian:MiClave@descargasgratis.llmmkdd.mongodb.net/?re
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client.bot_database
 
-# Funciones de la base de datos
+async def load_user_permissions_from_db():
+    """Load user permissions from MongoDB into memory"""
+    global user_permissions
+    try:
+        cursor = db.users.find({})
+        async for user in cursor:
+            if 'user_id' in user and 'expiry_date' in user and 'gb_limit' in user and 'gb_used' in user:
+                user_permissions[user['user_id']] = {
+                    "expiry_date": user['expiry_date'],
+                    "gb_limit": user['gb_limit'],
+                    "gb_used": user['gb_used']
+                }
+        print("✅ User permissions loaded from database")
+    except Exception as e:
+        print(f"❌ Error loading user permissions: {str(e)}")
+
 async def init_db():
+    """Initialize database connection and create indexes"""
     try:
         await mongo_client.admin.command('ping')
-        print("✅ Conectado a MongoDB Atlas")
+        print("✅ Connected to MongoDB Atlas")
         await db.users.create_index("user_id", unique=True)
-        print("✅ Índices creados correctamente")
+        print("✅ Indexes created successfully")
     except Exception as e:
-        print(f"❌ Error inicializando la base de datos: {e}")
+        print(f"❌ Error initializing database: {e}")
 
+async def init_bot():
+    """Initialize the bot and load necessary data"""
+    try:
+        # Initialize database
+        await init_db()
+        
+        # Load user permissions
+        await load_user_permissions_from_db()
+        
+        # Send startup message
+        try:
+            await bot.send_message(ADMIN_ID, '**Bot started! Press /start to begin**')
+        except Exception as e:
+            print(f"Could not send initial message: {e}")
+            
+        print("Bot initialized successfully")
+    except Exception as e:
+        print(f"Error during bot initialization: {e}")
+
+# Eliminar la duplicación al final del archivo y reemplazar con:
+if __name__ == "__main__":
+    # Add the callback handler
+    bot.add_handler(CallbackQueryHandler(handle_callback_query))
+    
+    # Start the bot
+    bot.start()
+    
+    # Run initialization
+    asyncio.get_event_loop().run_until_complete(init_bot())
+    
+    # Run the event loop
+    bot.loop.run_forever()
+    
 async def add_user_to_db(user_id: int, expiry_date: datetime, gb_limit: float):
     await db.users.update_one(
         {"user_id": user_id},
@@ -1356,22 +1412,6 @@ async def init_bot():
 # Ejecutar la inicialización
 asyncio.get_event_loop().run_until_complete(init_bot())
 bot.loop.run_forever()
-
-async def load_user_permissions_from_db():
-    """Carga los permisos de usuario desde MongoDB al diccionario en memoria"""
-    global user_permissions
-    try:
-        cursor = db.users.find({})
-        async for user in cursor:
-            if 'user_id' in user and 'expiry_date' in user and 'gb_limit' in user and 'gb_used' in user:
-                user_permissions[user['user_id']] = {
-                    "expiry_date": user['expiry_date'],
-                    "gb_limit": user['gb_limit'],
-                    "gb_used": user['gb_used']
-                }
-        print("✅ Permisos de usuarios cargados desde la base de datos")
-    except Exception as e:
-        print(f"❌ Error cargando permisos de usuarios: {str(e)}")
 
 # Inicializar el bot
 async def init_bot():
