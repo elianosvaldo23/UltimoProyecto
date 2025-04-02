@@ -72,6 +72,48 @@ cancel_uploads = {}
 cancel_upload = {} 
 bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
+# Añadir después de la línea 57, junto con las otras variables globales
+from motor.motor_asyncio import AsyncIOMotorClient
+from datetime import datetime, timedelta
+
+# Configuración de MongoDB
+MONGO_URI = "mongodb+srv://db_elian:db_EliaN0702@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
+mongo_client = AsyncIOMotorClient(MONGO_URI)
+db = mongo_client.bot_database
+
+# Funciones de la base de datos
+async def init_db():
+    try:
+        await mongo_client.admin.command('ping')
+        print("✅ Conectado a MongoDB Atlas")
+        await db.users.create_index("user_id", unique=True)
+        print("✅ Índices creados correctamente")
+    except Exception as e:
+        print(f"❌ Error inicializando la base de datos: {e}")
+
+async def add_user_to_db(user_id: int, expiry_date: datetime, gb_limit: float):
+    await db.users.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "expiry_date": expiry_date,
+                "gb_limit": gb_limit * 1024 * 1024 * 1024,
+                "gb_used": 0,
+                "updated_at": datetime.utcnow()
+            }
+        },
+        upsert=True
+    )
+
+async def get_user_from_db(user_id: int):
+    return await db.users.find_one({"user_id": user_id})
+
+async def update_user_storage_db(user_id: int, file_size: int):
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$inc": {"gb_used": file_size}}
+    )
+    
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
@@ -522,22 +564,23 @@ async def add_permission(client, message):
         current_hour, current_minute = map(int, bot_time.split(':'))
         now = datetime.now()
         current_time = now.replace(hour=current_hour, minute=current_minute)
-        
-        # Calcular la fecha de expiración manteniendo la misma hora
         expiry_date = current_time + timedelta(days=dias)
         
+        # Guardar en MongoDB
+        await add_user_to_db(user_id, expiry_date, gb_limit)
+        
+        # Actualizar el diccionario en memoria
         user_permissions[user_id] = {
             "expiry_date": expiry_date,
             "gb_limit": gb_limit * 1024 * 1024 * 1024,
             "gb_used": 0
         }
         
-        # Mensaje para el administrador
+        # Mensajes de confirmación
         await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
                           f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
                           f"💾 Límite: {gb_limit}GB")
         
-        # Notificar al usuario
         try:
             await bot.send_message(
                 user_id,
@@ -549,7 +592,7 @@ async def add_permission(client, message):
             )
         except Exception as e:
             await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
-        
+            
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
 
@@ -1226,10 +1269,11 @@ async def disable_maintenance(client, message):
         await message.reply("❌ No tienes permiso para usar este comando.")
         return
         
-        # Añadir aquí la nueva función
 async def update_user_storage(user_id, file_size):
     if user_id in user_permissions:
         user_permissions[user_id]["gb_used"] += file_size
+        # Actualizar en MongoDB
+        await update_user_storage_db(user_id, file_size)
 
     global maintenance_mode
     maintenance_mode = False
@@ -1241,7 +1285,11 @@ async def update_user_storage(user_id, file_size):
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
-bot.start()  
+bot.start()
+
+# Inicializar la base de datos
+asyncio.get_event_loop().run_until_complete(init_db())
+
 try:
     bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
 except Exception as e:
