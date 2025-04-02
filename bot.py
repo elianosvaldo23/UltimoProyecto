@@ -92,7 +92,6 @@ bot = Client(
     bot_token=bot_token,
     workers=1,
     max_concurrent_transmissions=1,
-    retry_delay=1,
     connect_timeout=15
 )
 downlist = {} #lista de archivos descargados
