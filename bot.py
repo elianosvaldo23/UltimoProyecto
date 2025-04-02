@@ -55,6 +55,10 @@ ADMIN_ID = 1742433244  # ID del administrador principal
 ADM = [1742433244]    # Lista de IDs de administradores
 user_permissions = {}  # Diccionario para almacenar permisos de usuarios
 bot_time = "00:00"    # Variable para almacenar la hora del bot
+REQUIRED_CHANNELS = [
+    {"title": "Http Custom 🇨🇺", "url": "https://t.me/congelamegas", "id": -1002398990043},  # Reemplaza con el ID real del canal
+    {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
+]
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -71,6 +75,34 @@ bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
+async def verify_user_membership(client, user_id):
+    """Verifica si el usuario es miembro de todos los canales requeridos."""
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await client.get_chat_member(channel["id"], user_id)
+            if member.status in ["left", "kicked"]:
+                return False
+        except Exception:
+            return False
+    return True
+
+async def show_join_channels_message(message):
+    """Muestra el mensaje con los botones para unirse a los canales."""
+    buttons = []
+    for channel in REQUIRED_CHANNELS:
+        buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
+    
+    buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
+    
+    keyboard = InlineKeyboardMarkup(buttons)
+    
+    await message.reply(
+        "❗️ Para usar el bot, debes unirte a nuestros canales oficiales:\n\n"
+        "1️⃣ Únete a los canales presionando los botones de abajo\n"
+        "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido\n",
+        reply_markup=keyboard
+        )
+    
 async def create_db_connection():
     return await aiomysql.connect(host=db_host, port=3306, user=db_user, password=db_password, db=db_name)
 
@@ -227,7 +259,7 @@ def convert_bytes_to_human(size):
         return f"{size / (1024 * 1024 * 1024):.2f} GB"
 
 async def handle_callback_query(client, callback_query):
-    user_id = callback_query.message.chat.id    
+    user_id = callback_query.from_user.id    
     if callback_query.data == f"cancel_upload_{user_id}":
         cancel_uploads[user_id] = True
         await callback_query.answer("🚫Task canceled🚫")
@@ -236,7 +268,13 @@ async def handle_callback_query(client, callback_query):
         cancel_upload[user_id] = True
         await callback_query.answer("🚫Task canceled🚫")
         return
-        
+    elif callback_query.data == "verify_membership":
+        is_member = await verify_user_membership(client, user_id)
+        if is_member:
+            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
+            await callback_query.message.delete()
+        else:
+            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
 
 def files_formatter(path, username):
     filespath = Path(path)
@@ -561,8 +599,7 @@ async def disable_maintenance(client, message):
         except Exception:
             pass
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
-
-@bot.on_message(filters.private)
+    
 @bot.on_message(filters.private)
 async def handle_message(client, message):
     user_id = message.from_user.id
@@ -571,6 +608,14 @@ async def handle_message(client, message):
     if maintenance_mode and user_id not in ADM:
         await message.reply_text(maintenance_message)
         return
+    
+    # Los administradores no necesitan verificación
+    if user_id not in ADM:
+        # Verificar membresía en canales
+        is_member = await verify_user_membership(client, user_id)
+        if not is_member:
+            await show_join_channels_message(message)
+            return
     
     # Permitir siempre al admin
     if user_id in ADM:  # Cambiado de ADMIN_ID a ADM
