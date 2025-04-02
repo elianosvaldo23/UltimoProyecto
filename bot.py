@@ -480,7 +480,13 @@ async def add_permission(client, message):
         dias = int(args[2])
         gb_limit = float(args[3].replace("gb", ""))
         
-        expiry_date = datetime.now() + timedelta(days=dias)
+        # Obtener la hora actual del bot
+        current_hour, current_minute = map(int, bot_time.split(':'))
+        now = datetime.now()
+        current_time = now.replace(hour=current_hour, minute=current_minute)
+        
+        # Calcular la fecha de expiración manteniendo la misma hora
+        expiry_date = current_time + timedelta(days=dias)
         
         user_permissions[user_id] = {
             "expiry_date": expiry_date,
@@ -493,7 +499,7 @@ async def add_permission(client, message):
                           f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
                           f"💾 Límite: {gb_limit}GB")
         
-        # Nuevo: Notificar al usuario
+        # Notificar al usuario
         try:
             await bot.send_message(
                 user_id,
