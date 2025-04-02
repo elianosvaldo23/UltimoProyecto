@@ -77,7 +77,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timedelta
 
 # Configuración de MongoDB
-MONGO_URI = "mongodb+srv://db_elian:db_EliaN0702@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
+MONGO_URI = "mongodb+srv://db_Elian:db_EliaN0702@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client.bot_database
 
