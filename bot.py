@@ -111,37 +111,6 @@ async def init_db():
         print("✅ Indexes created successfully")
     except Exception as e:
         print(f"❌ Error initializing database: {e}")
-
-async def init_bot():
-    """Initialize the bot and load necessary data"""
-    try:
-        # Initialize database
-        await init_db()
-        
-        # Load user permissions
-        await load_user_permissions_from_db()
-        
-        # Send startup message
-        try:
-            await bot.send_message(ADMIN_ID, '**Bot started! Press /start to begin**')
-        except Exception as e:
-            print(f"Could not send initial message: {e}")
-            
-        print("Bot initialized successfully")
-    except Exception as e:
-        print(f"Error during bot initialization: {e}")
-
-# Eliminar la duplicación al final del archivo y reemplazar con:
-if __name__ == "__main__":
-    
-    # Start the bot
-    bot.start()
-    
-    # Run initialization
-    asyncio.get_event_loop().run_until_complete(init_bot())
-    
-    # Run the event loop
-    bot.loop.run_forever()
     
 async def add_user_to_db(user_id: int, expiry_date: datetime, gb_limit: float):
     await db.users.update_one(
@@ -1410,16 +1379,6 @@ async def init_bot():
 # Ejecutar la inicialización
 asyncio.get_event_loop().run_until_complete(init_bot())
 bot.loop.run_forever()
-
-# Inicializar el bot
-async def init_bot():
-    await init_db()
-    await load_user_permissions_from_db()
-    try:
-        await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
-    except Exception as e:
-        print(f"No se pudo enviar el mensaje inicial: {e}")
-    print("Bot Iniciado")
 
 # Función principal de manejo de callbacks
 async def handle_callback_query(client, callback_query):
