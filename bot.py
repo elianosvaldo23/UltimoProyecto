@@ -75,7 +75,7 @@ cancel_upload = {}
 bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 # Configuración de MongoDB
-MONGO_URI = "mongodb+srv://Elian:<db_MiClave>@descargasgratis.llmmkdd.mongodb.net/"
+MONGO_URI = "mongodb+srv://Elian:MiClave@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client.bot_database
 
