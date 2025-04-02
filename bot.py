@@ -767,15 +767,13 @@ async def handle_message(client, message):
                 await message.reply_text("⚠️ Has alcanzado tu límite de almacenamiento.")
                 return
     
-    # Continuar con el código original del handle_message
+        # Continuar con el código original del handle_message
     username = message.from_user.username or str(user_id)
     mss = message.text
         
-        if username not in root:
+    if username not in root:  # Nivel correcto de indentación
         root[username] = await load_user_root_from_db(username)
-  #  if username not in USERS or username not in ADM:
-  #      await message.reply_text("No tienes acceso a este Bot\nContacta a @Stvz20")
-    
+
     if message.text.startswith('/start'):
         # Mensaje de bienvenida con botones
         welcome_message = (
@@ -783,7 +781,8 @@ async def handle_message(client, message):
             "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
         )
         # Enviar el mensaje con los botones
-        await message.reply_text(welcome_message)   
+        await message.reply_text(welcome_message)
+        
     elif '/wget' in mss:
         try:
             list = message.text.split(" ")[1]
