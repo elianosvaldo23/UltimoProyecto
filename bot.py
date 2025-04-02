@@ -117,17 +117,36 @@ ADM = [1742433244]
 
 async def verify_user_membership(client, user_id):
     """Verifica si el usuario es miembro de todos los canales requeridos."""
+    not_joined_channels = []
     for channel in REQUIRED_CHANNELS:
         try:
             member = await client.get_chat_member(channel["id"], user_id)
-            # Lista de estados que indican membresía activa
             valid_states = ["member", "administrator", "creator"]
             if member.status not in valid_states:
-                return False
+                not_joined_channels.append(channel)
         except Exception as e:
-            print(f"Error verificando membresía: {str(e)}")
-            return False
-    return True
+            print(f"Error verificando membresía en {channel['title']}: {str(e)}")
+            not_joined_channels.append(channel)
+    
+    is_member = len(not_joined_channels) == 0
+    
+    # Guardar el estado de verificación en la base de datos
+    try:
+        await db.users.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "channels_verified": is_member,
+                    "last_verification": datetime.utcnow(),
+                    "not_joined_channels": [c["title"] for c in not_joined_channels]
+                }
+            },
+            upsert=True
+        )
+    except Exception as e:
+        print(f"Error guardando verificación en DB: {str(e)}")
+    
+    return is_member, not_joined_channels
 
 async def show_join_channels_message(message):
     """Muestra el mensaje con los botones para unirse a los canales."""
@@ -313,7 +332,20 @@ async def handle_callback_query(client, callback_query):
         return
     elif callback_query.data == "verify_membership":
         try:
-            is_member = await verify_user_membership(client, user_id)
+            # Verificar si el usuario ya está verificado en la base de datos
+            user_data = await db.users.find_one({"user_id": user_id})
+            current_time = datetime.utcnow()
+            
+            if user_data and user_data.get("channels_verified") and \
+               (current_time - user_data["last_verification"]) < timedelta(minutes=30):
+                # Si está verificado y la verificación es reciente, no volver a verificar
+                await callback_query.answer("✅ ¡Ya estás verificado! Puedes usar el bot.", show_alert=True)
+                await callback_query.message.delete()
+                return
+
+            # Si no está verificado o la verificación es antigua, verificar nuevamente
+            is_member, not_joined_channels = await verify_user_membership(client, user_id)
+            
             if is_member:
                 await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.", show_alert=True)
                 # Enviar un mensaje de bienvenida después de verificar
@@ -324,10 +356,15 @@ async def handle_callback_query(client, callback_query):
                 await client.send_message(user_id, welcome_message)
                 await callback_query.message.delete()
             else:
-                channels_text = "\n".join([f"• {channel['title']}" for channel in REQUIRED_CHANNELS])
+                channels_text = "\n".join([f"• {channel['title']}" for channel in not_joined_channels])
                 await callback_query.answer(
-                    f"❌ Debes unirte a todos estos canales:\n\n{channels_text}", 
+                    "❌ Debes unirte a todos los canales requeridos antes de usar el bot.",
                     show_alert=True
+                )
+                await callback_query.message.edit_text(
+                    f"❗️ Aún no te has unido a los siguientes canales:\n\n{channels_text}\n\n"
+                    "Por favor, únete a todos los canales y presiona 'Verificar ✅' nuevamente.",
+                    reply_markup=callback_query.message.reply_markup
                 )
         except Exception as e:
             print(f"Error en verificación: {str(e)}")
