@@ -443,7 +443,6 @@ async def downloadmessage_progres(chunk, filesize, filename, start, message):
         except:pass
     seg = localtime().tm_sec
 
-  
 async def process_download(client: Client, message: Message, username: str, send):
     user_id = message.chat.id
     msg = await send("Verificando Archivo ", quote=True)
@@ -459,6 +458,12 @@ async def process_download(client: Client, message: Message, username: str, send
             if match:
                 filename = match.group(1)  # Obtener el nombre del archivo
             filename = limpiar_texto(filename)
+            
+            # Verificar límite de subida a la nube
+            if filesize > user_permissions.get(user_id, {}).get("upload_limit", float('inf')):
+                await message.reply("❌ El archivo excede tu límite de subida permitido.")
+                return
+                
         except Exception as e:
             filename = str(randint(11111, 999999)) + ".mp4"
             filesize = 0  # Tamaño desconocido
@@ -488,7 +493,6 @@ async def process_download(client: Client, message: Message, username: str, send
         
     msgg = files_formatter(str(root[username]["actual_root"]), username)
     await limite_msg(msgg[0], username)
-
 
 @bot.on_message(filters.media & filters.private)
 async def down_media(client: Client, message: Message):
@@ -565,9 +569,9 @@ async def add_permission(client, message):
         expiry_date = current_time + timedelta(days=dias)
         
         user_permissions[user_id] = {
-            "expiry_date": expiry_date,
-            "gb_limit": gb_limit * 1024 * 1024 * 1024,
-            "gb_used": 0
+        "expiry_date": expiry_date,
+        "upload_limit": gb_limit * 1024 * 1024 * 1024,  # Cambiar gb_limit por upload_limit
+        "gb_used": 0
         }
         
         # Mensaje para el administrador
