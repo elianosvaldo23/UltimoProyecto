@@ -47,8 +47,6 @@ from pyrogram.handlers import CallbackQueryHandler
 import unicodedata
 import openai
 from openai import OpenAI
-from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime, timedelta
 
 # Variables globales
 maintenance_mode = False
@@ -74,79 +72,19 @@ cancel_uploads = {}
 cancel_upload = {} 
 bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Configuración de MongoDB
-MONGO_URI = "mongodb+srv://Elian:MiClave@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
-mongo_client = AsyncIOMotorClient(MONGO_URI)
-db = mongo_client.bot_database
-
-# Funciones de la base de datos
-async def init_db():
-    try:
-        await mongo_client.admin.command('ping')
-        print("✅ Conectado a MongoDB Atlas")
-        await db.users.create_index("user_id", unique=True)
-        print("✅ Índices creados correctamente")
-    except Exception as e:
-        print(f"❌ Error inicializando la base de datos: {e}")
-
-async def add_user_to_db(user_id: int, expiry_date: datetime, gb_limit: float):
-    await db.users.update_one(
-        {"user_id": user_id},
-        {
-            "$set": {
-                "expiry_date": expiry_date,
-                "gb_limit": gb_limit * 1024 * 1024 * 1024,
-                "gb_used": 0,
-                "updated_at": datetime.utcnow()
-            }
-        },
-        upsert=True
-    )
-
-async def get_user_from_db(user_id: int):
-    return await db.users.find_one({"user_id": user_id})
-
-async def update_user_storage_db(user_id: int, file_size: int):
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$inc": {"gb_used": file_size}}
-    )
-    
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
 async def verify_user_membership(client, user_id):
     """Verifica si el usuario es miembro de todos los canales requeridos."""
-    not_joined_channels = []
     for channel in REQUIRED_CHANNELS:
         try:
             member = await client.get_chat_member(channel["id"], user_id)
-            valid_states = ["member", "administrator", "creator"]
-            if member.status not in valid_states:
-                not_joined_channels.append(channel)
-        except Exception as e:
-            print(f"Error verificando membresía en {channel['title']}: {str(e)}")
-            not_joined_channels.append(channel)
-    
-    is_member = len(not_joined_channels) == 0
-    
-    # Guardar el estado de verificación en la base de datos
-    try:
-        await db.users.update_one(
-            {"user_id": user_id},
-            {
-                "$set": {
-                    "channels_verified": is_member,
-                    "last_verification": datetime.utcnow(),
-                    "not_joined_channels": [c["title"] for c in not_joined_channels]
-                }
-            },
-            upsert=True
-        )
-    except Exception as e:
-        print(f"Error guardando verificación en DB: {str(e)}")
-    
-    return is_member, not_joined_channels
+            if member.status in ["left", "kicked"]:
+                return False
+        except Exception:
+            return False
+    return True
 
 async def show_join_channels_message(message):
     """Muestra el mensaje con los botones para unirse a los canales."""
@@ -331,44 +269,12 @@ async def handle_callback_query(client, callback_query):
         await callback_query.answer("🚫Task canceled🚫")
         return
     elif callback_query.data == "verify_membership":
-        try:
-            # Verificar si el usuario ya está verificado en la base de datos
-            user_data = await db.users.find_one({"user_id": user_id})
-            current_time = datetime.utcnow()
-            
-            if user_data and user_data.get("channels_verified") and \
-               (current_time - user_data["last_verification"]) < timedelta(minutes=30):
-                # Si está verificado y la verificación es reciente, no volver a verificar
-                await callback_query.answer("✅ ¡Ya estás verificado! Puedes usar el bot.", show_alert=True)
-                await callback_query.message.delete()
-                return
-
-            # Si no está verificado o la verificación es antigua, verificar nuevamente
-            is_member, not_joined_channels = await verify_user_membership(client, user_id)
-            
-            if is_member:
-                await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.", show_alert=True)
-                # Enviar un mensaje de bienvenida después de verificar
-                welcome_message = (
-                    "¡Bienvenido al bot de descargas!\n\n"
-                    "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
-                )
-                await client.send_message(user_id, welcome_message)
-                await callback_query.message.delete()
-            else:
-                channels_text = "\n".join([f"• {channel['title']}" for channel in not_joined_channels])
-                await callback_query.answer(
-                    "❌ Debes unirte a todos los canales requeridos antes de usar el bot.",
-                    show_alert=True
-                )
-                await callback_query.message.edit_text(
-                    f"❗️ Aún no te has unido a los siguientes canales:\n\n{channels_text}\n\n"
-                    "Por favor, únete a todos los canales y presiona 'Verificar ✅' nuevamente.",
-                    reply_markup=callback_query.message.reply_markup
-                )
-        except Exception as e:
-            print(f"Error en verificación: {str(e)}")
-            await callback_query.answer("❌ Error al verificar la membresía. Intenta de nuevo.", show_alert=True)
+        is_member = await verify_user_membership(client, user_id)
+        if is_member:
+            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
+            await callback_query.message.delete()
+        else:
+            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
 
 def files_formatter(path, username):
     filespath = Path(path)
@@ -616,23 +522,22 @@ async def add_permission(client, message):
         current_hour, current_minute = map(int, bot_time.split(':'))
         now = datetime.now()
         current_time = now.replace(hour=current_hour, minute=current_minute)
+        
+        # Calcular la fecha de expiración manteniendo la misma hora
         expiry_date = current_time + timedelta(days=dias)
         
-        # Guardar en MongoDB
-        await add_user_to_db(user_id, expiry_date, gb_limit)
-        
-        # Actualizar el diccionario en memoria
         user_permissions[user_id] = {
             "expiry_date": expiry_date,
             "gb_limit": gb_limit * 1024 * 1024 * 1024,
             "gb_used": 0
         }
         
-        # Mensajes de confirmación
+        # Mensaje para el administrador
         await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
                           f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
                           f"💾 Límite: {gb_limit}GB")
         
+        # Notificar al usuario
         try:
             await bot.send_message(
                 user_id,
@@ -644,7 +549,7 @@ async def add_permission(client, message):
             )
         except Exception as e:
             await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
-            
+        
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
 
@@ -751,6 +656,7 @@ async def handle_message(client, message):
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
 
+ 
     if message.text.startswith('/start'):
         # Mensaje de bienvenida con botones
         welcome_message = (
@@ -805,8 +711,6 @@ async def handle_message(client, message):
             await message.reply(f"El directorio de descargas ha sido eliminado. \n\nAhora tienes {sizeof_fmt(0)} de uso")  # Notificar al usuario
         except Exception as e:
             await message.reply(f"Error al eliminar el directorio: {e}")
-
-
 
     elif "youtube.com" in mss:
         url = message.text # Obtener la URL del video de YouTube
@@ -1318,11 +1222,10 @@ async def disable_maintenance(client, message):
         await message.reply("❌ No tienes permiso para usar este comando.")
         return
         
+        # Añadir aquí la nueva función
 async def update_user_storage(user_id, file_size):
     if user_id in user_permissions:
         user_permissions[user_id]["gb_used"] += file_size
-        # Actualizar en MongoDB
-        await update_user_storage_db(user_id, file_size)
 
     global maintenance_mode
     maintenance_mode = False
@@ -1334,11 +1237,7 @@ async def update_user_storage(user_id, file_size):
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
-bot.start()
-
-# Inicializar la base de datos
-asyncio.get_event_loop().run_until_complete(init_db())
-
+bot.start()  
 try:
     bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
 except Exception as e:
