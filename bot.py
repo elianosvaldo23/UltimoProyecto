@@ -115,6 +115,22 @@ async def update_user_storage_db(user_id: int, file_size: int):
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
+async def save_user_root_to_db(user_id: str, root_data: dict):
+    await db.user_roots.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "root_data": root_data,
+            "updated_at": datetime.utcnow()
+        }},
+        upsert=True
+    )
+
+async def load_user_root_from_db(user_id: str):
+    data = await db.user_roots.find_one({"user_id": user_id})
+    if data:
+        return data["root_data"]
+    return {"actual_root": f"downloads/{user_id}"}
+
 async def verify_user_membership(client, user_id):
     """Verifica si el usuario es miembro de todos los canales requeridos."""
     not_joined_channels = []
@@ -703,6 +719,15 @@ async def handle_message(client, message):
     if maintenance_mode and user_id not in ADM:
         await message.reply_text(maintenance_message)
         return
+
+    # Cargar datos del usuario desde MongoDB
+    user_data = await get_user_from_db(user_id)
+    if user_data:
+        user_permissions[user_id] = {
+            "expiry_date": user_data["expiry_date"],
+            "gb_limit": user_data["gb_limit"],
+            "gb_used": user_data["gb_used"]
+        }
     
     # Los administradores no necesitan verificación
     if user_id not in ADM:
@@ -746,11 +771,8 @@ async def handle_message(client, message):
     username = message.from_user.username or str(user_id)
     mss = message.text
         
-    if username not in downlist:
-        downlist[username] = []
-    if username not in root:
-        root[username] = {"actual_root": f"downloads/{username}"}
-
+        if username not in root:
+        root[username] = await load_user_root_from_db(username)
   #  if username not in USERS or username not in ADM:
   #      await message.reply_text("No tienes acceso a este Bot\nContacta a @Stvz20")
     
@@ -938,13 +960,13 @@ async def handle_message(client, message):
             await bot.send_message(username,"**El nombre no puede contener Caracteres Especiales**")
             return
         rut = root[username]["actual_root"]
-        try:
+       try:
             os.mkdir(f"{rut}/{name}")
-        except Exception as a:
+            await save_user_root_to_db(username, root[username])
+       except Exception as a:
             await bot.send_message(username, a)
-        await bot.send_message(username, f"**Carpeta Creada**\n\n`/{name}`")
         msg = files_formatter(str(root[username]["actual_root"]),username)
-        await limite_msg(msg[0],username)
+            await limite_msg(msg[0],username)
         
     elif "/split" in mss:
         try:
