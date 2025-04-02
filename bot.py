@@ -1348,40 +1348,6 @@ async def update_user_storage(user_id, file_size):
             pass
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
-bot.add_handler(CallbackQueryHandler(handle_callback_query))
-bot.start()
-
-if __name__ == "__main__":
-    async def main():
-        await init_db()
-        await load_user_permissions_from_db()
-        try:
-            await bot.start()
-            print("✅ Bot iniciado correctamente")
-            await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
-            await bot.idle()
-        except Exception as e:
-            print(f"❌ Error al iniciar el bot: {str(e)}")
-        finally:
-            await bot.stop()
-
-    asyncio.run(main())
-
-# Inicializar el bot
-async def init_bot():
-    await init_db()
-    await load_user_permissions_from_db()
-    try:
-        await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
-    except Exception as e:
-        print(f"No se pudo enviar el mensaje inicial: {e}")
-    print("Bot Iniciado")
-
-# Ejecutar la inicialización
-asyncio.get_event_loop().run_until_complete(init_bot())
-bot.loop.run_forever()
-
-# Función principal de manejo de callbacks
 async def handle_callback_query(client, callback_query):
     user_id = callback_query.from_user.id    
     if callback_query.data == f"cancel_upload_{user_id}":
@@ -1428,6 +1394,41 @@ async def handle_callback_query(client, callback_query):
         except Exception as e:
             print(f"Error en verificación: {str(e)}")
             await callback_query.answer("❌ Error al verificar la membresía. Intenta de nuevo.", show_alert=True)
+    
+bot.add_handler(CallbackQueryHandler(handle_callback_query))
+bot.start()
+
+if __name__ == "__main__":
+    async def main():
+        await init_db()
+        await load_user_permissions_from_db()
+        try:
+            await bot.start()
+            print("✅ Bot iniciado correctamente")
+            await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
+            await bot.idle()
+        except Exception as e:
+            print(f"❌ Error al iniciar el bot: {str(e)}")
+        finally:
+            await bot.stop()
+
+    asyncio.run(main())
+
+# Inicializar el bot
+async def init_bot():
+    await init_db()
+    await load_user_permissions_from_db()
+    try:
+        await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
+    except Exception as e:
+        print(f"No se pudo enviar el mensaje inicial: {e}")
+    print("Bot Iniciado")
+
+# Ejecutar la inicialización
+asyncio.get_event_loop().run_until_complete(init_bot())
+bot.loop.run_forever()
+
+# Función principal de manejo de callbacks
 
 if __name__ == "__main__":
     # Agregar el handler de callbacks
