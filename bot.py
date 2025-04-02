@@ -91,8 +91,7 @@ bot = Client(
     api_hash=api_hash,
     bot_token=bot_token,
     workers=1,
-    max_concurrent_transmissions=1,
-    connect_timeout=15
+    max_concurrent_transmissions=1
 )
 downlist = {} #lista de archivos descargados
 root = {} #directorio actua
