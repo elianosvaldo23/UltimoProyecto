@@ -47,6 +47,8 @@ from pyrogram.handlers import CallbackQueryHandler
 import unicodedata
 import openai
 from openai import OpenAI
+import sqlite3
+from database import Database
 
 # Variables globales
 maintenance_mode = False
@@ -55,10 +57,23 @@ ADMIN_ID = 1742433244  # ID del administrador principal
 ADM = [1742433244]    # Lista de IDs de administradores
 user_permissions = {}  # Diccionario para almacenar permisos de usuarios
 bot_time = "00:00"    # Variable para almacenar la hora del bot
+db = Database()
 REQUIRED_CHANNELS = [
     {"title": "Http Custom 🇨🇺", "url": "https://t.me/congelamegas", "id": -1002398990043},  # Reemplaza con el ID real del canal
     {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
 ]
+
+def load_user_data():
+    conn = sqlite3.connect(db.db_file)
+    c = conn.cursor()
+    c.execute('SELECT user_id, permissions FROM users')
+    for user_id, permissions in c.fetchall():
+        if permissions:
+            user_permissions[user_id] = json.loads(permissions)
+    conn.close()
+
+# Cargar datos al inicio
+load_user_data()
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -77,23 +92,43 @@ ADM = [1742433244]
 
 async def verify_user_membership(client, user_id):
     """Verifica si el usuario es miembro de todos los canales requeridos."""
+    all_verified = True
     for channel in REQUIRED_CHANNELS:
+        # Primero verificar en la base de datos
+        if db.is_user_verified(user_id, channel["id"]):
+            continue
+            
         try:
             member = await client.get_chat_member(channel["id"], user_id)
-            if member.status in ["left", "kicked"]:
-                return False
+            if member.status in ["member", "administrator", "creator"]:
+                # Actualizar la base de datos
+                db.update_channel_verification(user_id, channel["id"])
+            else:
+                all_verified = False
+                break
         except Exception:
-            return False
-    return True
+            all_verified = False
+            break
+    return all_verified
 
 async def show_join_channels_message(message):
     """Muestra el mensaje con los botones para unirse a los canales."""
+    user_id = message.from_user.id
+    username = message.from_user.username or str(user_id)
+    
+    # Registrar usuario en la base de datos si no existe
+    db.add_user(user_id, username)
+    
     buttons = []
     for channel in REQUIRED_CHANNELS:
-        buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
+        if not db.is_user_verified(user_id, channel["id"]):
+            buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
     
+    if not buttons:
+        await message.reply("✅ Ya estás verificado en todos los canales.")
+        return
+        
     buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
-    
     keyboard = InlineKeyboardMarkup(buttons)
     
     await message.reply(
@@ -101,15 +136,11 @@ async def show_join_channels_message(message):
         "1️⃣ Únete a los canales presionando los botones de abajo\n"
         "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido\n",
         reply_markup=keyboard
-        )
+    )
     
-async def create_db_connection():
-    return await aiomysql.connect(host=db_host, port=3306, user=db_user, password=db_password, db=db_name)
-
 # Cola global de descargas
 download_queue = deque()
 download_in_progress = False
-
 
 # Manejador para la selección de calidad
 @bot.on_callback_query(filters.regex(r"^yt_"))
@@ -471,9 +502,6 @@ def eta_fmt(seconds):
           
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import UserNotParticipant
-
-# ID del canal al que los usuarios deben unirse
-CANAL_ID = -1002534252574  # Reemplaza con el ID de tu canal
 
 @bot.on_message(filters.command("horario"))
 async def set_time(client, message):
