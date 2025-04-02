@@ -120,9 +120,12 @@ async def verify_user_membership(client, user_id):
     for channel in REQUIRED_CHANNELS:
         try:
             member = await client.get_chat_member(channel["id"], user_id)
-            if member.status in ["left", "kicked"]:
+            # Lista de estados que indican membresía activa
+            valid_states = ["member", "administrator", "creator"]
+            if member.status not in valid_states:
                 return False
-        except Exception:
+        except Exception as e:
+            print(f"Error verificando membresía: {str(e)}")
             return False
     return True
 
@@ -309,12 +312,26 @@ async def handle_callback_query(client, callback_query):
         await callback_query.answer("🚫Task canceled🚫")
         return
     elif callback_query.data == "verify_membership":
-        is_member = await verify_user_membership(client, user_id)
-        if is_member:
-            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
-            await callback_query.message.delete()
-        else:
-            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
+        try:
+            is_member = await verify_user_membership(client, user_id)
+            if is_member:
+                await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.", show_alert=True)
+                # Enviar un mensaje de bienvenida después de verificar
+                welcome_message = (
+                    "¡Bienvenido al bot de descargas!\n\n"
+                    "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
+                )
+                await client.send_message(user_id, welcome_message)
+                await callback_query.message.delete()
+            else:
+                channels_text = "\n".join([f"• {channel['title']}" for channel in REQUIRED_CHANNELS])
+                await callback_query.answer(
+                    f"❌ Debes unirte a todos estos canales:\n\n{channels_text}", 
+                    show_alert=True
+                )
+        except Exception as e:
+            print(f"Error en verificación: {str(e)}")
+            await callback_query.answer("❌ Error al verificar la membresía. Intenta de nuevo.", show_alert=True)
 
 def files_formatter(path, username):
     filespath = Path(path)
