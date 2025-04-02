@@ -70,16 +70,37 @@ REQUIRED_CHANNELS = [
 ]
 
 # BoT Configuration Variables
+import os
+
+# Create sessions directory if it doesn't exist
+if not os.path.exists("sessions"):
+    os.makedirs("sessions")
+
+# Clear existing session if needed
+session_file = "sessions/bot.session"
+if os.path.exists(session_file):
+    os.remove(session_file)
+
 api_id = 13876032
 api_hash = "c87c88faace9139628f6c7ffc2662bff"
 bot_token = "7716154596:AAFy5dMzQEithATmAM53BTQhfCY6xGl2Gw0"
+
+bot = Client(
+    "sessions/bot",  # Changed from "bot" to "sessions/bot"
+    api_id=api_id,
+    api_hash=api_hash,
+    bot_token=bot_token,
+    workers=1,
+    max_concurrent_transmissions=1,
+    retry_delay=1,
+    connect_timeout=15
+)
 downlist = {} #lista de archivos descargados
 root = {} #directorio actua
 id_path = {}
 seg = 0
 cancel_uploads = {} 
 cancel_upload = {} 
-bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 # Configuración de MongoDB
 MONGO_URI = "mongodb+srv://Elian:MiClave@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
@@ -1365,6 +1386,18 @@ async def update_user_storage(user_id, file_size):
 
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()
+
+async def start_bot():
+    try:
+        await bot.start()
+        print("✅ Bot iniciado correctamente")
+    except Exception as e:
+        print(f"❌ Error al iniciar el bot: {str(e)}")
+        return None
+
+# Modifica la forma en que inicias el bot
+if __name__ == "__main__":
+    asyncio.run(start_bot())
 
 # Inicializar el bot
 async def init_bot():
