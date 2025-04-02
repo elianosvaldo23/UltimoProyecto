@@ -936,7 +936,7 @@ async def handle_message(client, message):
         except Exception as ex:
             await bot.send_message(username, str(ex))
             
-    elif '/rdir' in mss:
+        elif '/rdir' in mss:
         list = message.text.split("_")[1]
         filespath = Path(str(root[username]["actual_root"]) + "/")
         msgh = files_formatter(str(root[username]["actual_root"]), username)
@@ -953,19 +953,20 @@ async def handle_message(client, message):
         except Exception as ex:
             await bot.send_message(username, str(ex))
             
-        elif '/mkdir' in mss:
+    # Corregir el bloque mkdir
+    elif '/mkdir' in mss:
         name = message.text.split(" ")[1]
         if "." in name or "/" in name or "*" in name:
             await bot.send_message(username,"**El nombre no puede contener Caracteres Especiales**")
             return
         rut = root[username]["actual_root"]
-        try:  # Corregir la indentación aquí
+        try:
             os.mkdir(f"{rut}/{name}")
             await save_user_root_to_db(username, root[username])
         except Exception as a:
             await bot.send_message(username, a)
         msg = files_formatter(str(root[username]["actual_root"]),username)
-        await limite_msg(msg[0],username)  # Corregir la indentación aquí también
+        await limite_msg(msg[0],username)
         
     elif "/split" in mss:
         try:
