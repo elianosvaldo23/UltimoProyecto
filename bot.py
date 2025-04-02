@@ -751,9 +751,6 @@ async def handle_message(client, message):
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
 
-  #  if username not in USERS or username not in ADM:
-  #      await message.reply_text("No tienes acceso a este Bot\nContacta a @Stvz20")
-    
     if message.text.startswith('/start'):
         # Mensaje de bienvenida con botones
         welcome_message = (
