@@ -133,8 +133,6 @@ async def init_bot():
 
 # Eliminar la duplicación al final del archivo y reemplazar con:
 if __name__ == "__main__":
-    # Add the callback handler
-    bot.add_handler(CallbackQueryHandler(handle_callback_query))
     
     # Start the bot
     bot.start()
@@ -1423,9 +1421,63 @@ async def init_bot():
         print(f"No se pudo enviar el mensaje inicial: {e}")
     print("Bot Iniciado")
 
-bot.add_handler(CallbackQueryHandler(handle_callback_query))
-bot.start()
+# Función principal de manejo de callbacks
+async def handle_callback_query(client, callback_query):
+    user_id = callback_query.from_user.id    
+    if callback_query.data == f"cancel_upload_{user_id}":
+        cancel_uploads[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
+        return
+    elif callback_query.data == f"cancel_uploa_{user_id}":
+        cancel_upload[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
+        return
+    elif callback_query.data == "verify_membership":
+        try:
+            # Verificar si el usuario ya está verificado en la base de datos
+            user_data = await db.users.find_one({"user_id": user_id})
+            current_time = datetime.utcnow()
+            
+            if user_data and user_data.get("channels_verified") and \
+               (current_time - user_data["last_verification"]) < timedelta(minutes=30):
+                await callback_query.answer("✅ ¡Ya estás verificado! Puedes usar el bot.", show_alert=True)
+                await callback_query.message.delete()
+                return
 
-# Ejecutar la inicialización
-asyncio.get_event_loop().run_until_complete(init_bot())
-bot.loop.run_forever()
+            is_member, not_joined_channels = await verify_user_membership(client, user_id)
+            
+            if is_member:
+                await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.", show_alert=True)
+                welcome_message = (
+                    "¡Bienvenido al bot de descargas!\n\n"
+                    "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
+                )
+                await client.send_message(user_id, welcome_message)
+                await callback_query.message.delete()
+            else:
+                channels_text = "\n".join([f"• {channel['title']}" for channel in not_joined_channels])
+                await callback_query.answer(
+                    "❌ Debes unirte a todos los canales requeridos antes de usar el bot.",
+                    show_alert=True
+                )
+                await callback_query.message.edit_text(
+                    f"❗️ Aún no te has unido a los siguientes canales:\n\n{channels_text}\n\n"
+                    "Por favor, únete a todos los canales y presiona 'Verificar ✅' nuevamente.",
+                    reply_markup=callback_query.message.reply_markup
+                )
+        except Exception as e:
+            print(f"Error en verificación: {str(e)}")
+            await callback_query.answer("❌ Error al verificar la membresía. Intenta de nuevo.", show_alert=True)
+
+if __name__ == "__main__":
+    # Agregar el handler de callbacks
+    bot.add_handler(CallbackQueryHandler(handle_callback_query))
+    
+    # Iniciar el bot
+    bot.start()
+    
+    # Ejecutar la inicialización
+    asyncio.get_event_loop().run_until_complete(init_bot())
+    
+    # Ejecutar el loop de eventos
+    bot.loop.run_forever()
