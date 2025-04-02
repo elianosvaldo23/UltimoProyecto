@@ -47,6 +47,8 @@ from pyrogram.handlers import CallbackQueryHandler
 import unicodedata
 import openai
 from openai import OpenAI
+from motor.motor_asyncio import AsyncIOMotorClient
+from datetime import datetime, timedelta
 
 # Variables globales
 maintenance_mode = False
@@ -73,9 +75,6 @@ cancel_upload = {}
 bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 # Añadir después de la línea 57, junto con las otras variables globales
-from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime, timedelta
-
 # Configuración de MongoDB
 MONGO_URI = "mongodb+srv://db_Elian:db_EliaN0702@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
 mongo_client = AsyncIOMotorClient(MONGO_URI)
