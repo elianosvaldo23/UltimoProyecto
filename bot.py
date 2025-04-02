@@ -661,9 +661,13 @@ async def remove_permission(client, message):
             return
 
         user_id = int(args[1])
-
-        if user_id in user_permissions:
-            del user_permissions[user_id]
+        
+        # Eliminar de la base de datos
+        result = await db.users.delete_one({"user_id": user_id})
+        
+        if result.deleted_count > 0:
+            if user_id in user_permissions:
+                del user_permissions[user_id]
             await message.reply(f"✅ Permisos eliminados para el usuario {user_id}.")
             await bot.send_message(user_id, "❌ Tus permisos han sido revocados por el administrador.")
         else:
@@ -1339,12 +1343,32 @@ async def update_user_storage(user_id, file_size):
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()
 
-# Inicializar la base de datos
-asyncio.get_event_loop().run_until_complete(init_db())
+# Inicializar el bot
+async def init_bot():
+    await init_db()
+    await load_user_permissions_from_db()
+    try:
+        await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
+    except Exception as e:
+        print(f"No se pudo enviar el mensaje inicial: {e}")
+    print("Bot Iniciado")
 
-try:
-    bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
-except Exception as e:
-    print(f"No se pudo enviar el mensaje inicial: {e}")
-print("Bot Iniciado")
+# Ejecutar la inicialización
+asyncio.get_event_loop().run_until_complete(init_bot())
 bot.loop.run_forever()
+
+async def load_user_permissions_from_db():
+    """Carga los permisos de usuario desde MongoDB al diccionario en memoria"""
+    global user_permissions
+    try:
+        cursor = db.users.find({})
+        async for user in cursor:
+            if 'user_id' in user and 'expiry_date' in user and 'gb_limit' in user and 'gb_used' in user:
+                user_permissions[user['user_id']] = {
+                    "expiry_date": user['expiry_date'],
+                    "gb_limit": user['gb_limit'],
+                    "gb_used": user['gb_used']
+                }
+        print("✅ Permisos de usuarios cargados desde la base de datos")
+    except Exception as e:
+        print(f"❌ Error cargando permisos de usuarios: {str(e)}")
