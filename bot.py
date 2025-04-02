@@ -249,17 +249,27 @@ async def download_from_url(msg, client: Client, message: Message, url: str, use
         return
 
 # Manejador para enlaces directos
-async def progress_callback(current, total, message, start_time):
-    """Función de callback para mostrael progreso de subida."""
-    global seg
-    now = time()
-    user_id = message.chat.id
-    diff = now - start_time
-    if diff == 0:
+async def handle_callback_query(client, callback_query):
+    user_id = callback_query.from_user.id    
+    
+    if callback_query.data == "verify_membership":
+        is_member = await verify_user_membership(client, user_id)
+        if is_member:
+            for channel in REQUIRED_CHANNELS:
+                db.update_channel_verification(user_id, channel["id"])
+            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
+            await callback_query.message.delete()
+        else:
+            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
+    elif callback_query.data == f"cancel_upload_{user_id}":
+        cancel_uploads[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
         return
-    if user_id in cancel_uploads and cancel_uploads[user_id]:  # Verifica si el usuario canceló
-        await message.edit("**🚫  Subida cancelada  🚫**")
+    elif callback_query.data == f"cancel_uploa_{user_id}":
+        cancel_upload[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
         return
+        
     speed = current / diff
     percent = current * 100 / total
     speed_human = convert_bytes_to_human(speed)
