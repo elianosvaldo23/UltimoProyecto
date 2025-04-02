@@ -48,99 +48,47 @@ import unicodedata
 import openai
 from openai import OpenAI
 from motor.motor_asyncio import AsyncIOMotorClient
-import logging
-import signal
-from contextlib import asynccontextmanager
-
-# Configuración del manejo de señales
-def signal_handler():
-    print("Deteniendo el bot...")
-    asyncio.get_event_loop().stop()
-
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-
-# Configuración de logging (opcional pero recomendado)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from datetime import datetime, timedelta
 
 # Variables globales
 maintenance_mode = False
-maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
+maintenance_message = "âš ï¸ El bot estÃ¡ en mantenimiento. Por favor, intÃ©ntalo mÃ¡s tarde. âš ï¸"
 ADMIN_ID = 1742433244  # ID del administrador principal
 ADM = [1742433244]    # Lista de IDs de administradores
 user_permissions = {}  # Diccionario para almacenar permisos de usuarios
 bot_time = "00:00"    # Variable para almacenar la hora del bot
 REQUIRED_CHANNELS = [
-    {"title": "Http Custom 🇨🇺", "url": "https://t.me/congelamegas", "id": -1002398990043},  # Reemplaza con el ID real del canal
-    {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
+    {"title": "Http Custom ðŸ‡¨ðŸ‡º", "url": "https://t.me/congelamegas", "id": -1002398990043},  # Reemplaza con el ID real del canal
+    {"title": "Canal Principal ðŸ‡¨ðŸ‡º", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
 ]
 
 # BoT Configuration Variables
-import os
-
-# Create sessions directory if it doesn't exist
-if not os.path.exists("sessions"):
-    os.makedirs("sessions")
-
-# Clear existing session if needed
-session_file = "sessions/bot.session"
-if os.path.exists(session_file):
-    os.remove(session_file)
-
 api_id = 13876032
 api_hash = "c87c88faace9139628f6c7ffc2662bff"
 bot_token = "7716154596:AAFy5dMzQEithATmAM53BTQhfCY6xGl2Gw0"
-
-bot = Client(
-    "sessions/bot",  # Changed from "bot" to "sessions/bot"
-    api_id=api_id,
-    api_hash=api_hash,
-    bot_token=bot_token,
-    workers=1,
-    max_concurrent_transmissions=1
-)
 downlist = {} #lista de archivos descargados
 root = {} #directorio actua
 id_path = {}
 seg = 0
 cancel_uploads = {} 
 cancel_upload = {} 
+bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Configuración de MongoDB
+# ConfiguraciÃ³n de MongoDB
 MONGO_URI = "mongodb+srv://Elian:MiClave@descargasgratis.llmmkdd.mongodb.net/?retryWrites=true&w=majority&appName=descargasgratis"
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client.bot_database
 
-async def load_user_permissions_from_db():
-    """Load user permissions from MongoDB into memory"""
-    global user_permissions
-    try:
-        cursor = db.users.find({})
-        async for user in cursor:
-            if 'user_id' in user and 'expiry_date' in user and 'gb_limit' in user and 'gb_used' in user:
-                user_permissions[user['user_id']] = {
-                    "expiry_date": user['expiry_date'],
-                    "gb_limit": user['gb_limit'],
-                    "gb_used": user['gb_used']
-                }
-        print("✅ User permissions loaded from database")
-    except Exception as e:
-        print(f"❌ Error loading user permissions: {str(e)}")
-
+# Funciones de la base de datos
 async def init_db():
-    """Initialize database connection and create indexes"""
     try:
         await mongo_client.admin.command('ping')
-        print("✅ Connected to MongoDB Atlas")
+        print("âœ… Conectado a MongoDB Atlas")
         await db.users.create_index("user_id", unique=True)
-        print("✅ Indexes created successfully")
+        print("âœ… Ãndices creados correctamente")
     except Exception as e:
-        print(f"❌ Error initializing database: {e}")
-    
+        print(f"âŒ Error inicializando la base de datos: {e}")
+
 async def add_user_to_db(user_id: int, expiry_date: datetime, gb_limit: float):
     await db.users.update_one(
         {"user_id": user_id},
@@ -177,12 +125,12 @@ async def verify_user_membership(client, user_id):
             if member.status not in valid_states:
                 not_joined_channels.append(channel)
         except Exception as e:
-            print(f"Error verificando membresía en {channel['title']}: {str(e)}")
+            print(f"Error verificando membresÃ­a en {channel['title']}: {str(e)}")
             not_joined_channels.append(channel)
     
     is_member = len(not_joined_channels) == 0
     
-    # Guardar el estado de verificación en la base de datos
+    # Guardar el estado de verificaciÃ³n en la base de datos
     try:
         await db.users.update_one(
             {"user_id": user_id},
@@ -196,7 +144,7 @@ async def verify_user_membership(client, user_id):
             upsert=True
         )
     except Exception as e:
-        print(f"Error guardando verificación en DB: {str(e)}")
+        print(f"Error guardando verificaciÃ³n en DB: {str(e)}")
     
     return is_member, not_joined_channels
 
@@ -206,14 +154,14 @@ async def show_join_channels_message(message):
     for channel in REQUIRED_CHANNELS:
         buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
     
-    buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
+    buttons.append([InlineKeyboardButton("Verificar âœ…", callback_data="verify_membership")])
     
     keyboard = InlineKeyboardMarkup(buttons)
     
     await message.reply(
-        "❗️ Para usar el bot, debes unirte a nuestros canales oficiales:\n\n"
-        "1️⃣ Únete a los canales presionando los botones de abajo\n"
-        "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido\n",
+        "â—ï¸ Para usar el bot, debes unirte a nuestros canales oficiales:\n\n"
+        "1ï¸âƒ£ Ãšnete a los canales presionando los botones de abajo\n"
+        "2ï¸âƒ£ Presiona 'Verificar âœ…' cuando te hayas unido\n",
         reply_markup=keyboard
         )
     
@@ -225,7 +173,7 @@ download_queue = deque()
 download_in_progress = False
 
 
-# Manejador para la selección de calidad
+# Manejador para la selecciÃ³n de calidad
 @bot.on_callback_query(filters.regex(r"^yt_"))
 async def seleccionar_calidad(client, callback_query):
     datos = callback_query.data.split("_")
@@ -236,11 +184,11 @@ async def seleccionar_calidad(client, callback_query):
     ruta_descarga = root[username]["actual_root"]
 
     await callback_query.answer(f"Descargando Video en {calidad}...")
-    # Usar await en lugar de create_task
-    await descargar_video_youtube(url, ruta_descarga, callback_query.message, calidad)
+    asyncio.create_task(descargar_video_youtube(url, ruta_descarga, callback_query.message, calidad))
+    #await descargar_video_youtube(url, ruta_descarga, callback_query.message, calidad)
 
 
-# Función para obtener el uso de recursos del sistema
+# FunciÃ³n para obtener el uso de recursos del sistema
 def get_system_info():
     cpu_usage = psutil.cpu_percent(interval=1)
     ram_info = psutil.virtual_memory()
@@ -257,7 +205,7 @@ def get_system_info():
         f"**Disco Libre:** {disk_info.free / (1024 ** 3):.2f} GB\n"
     )
 
-# Función para mostrar el progreso de la descarga
+# FunciÃ³n para mostrar el progreso de la descarga
 async def download_progress(current, total, msg, start_time, position):
     global seg
     now = datetime.now().timestamp()
@@ -265,54 +213,48 @@ async def download_progress(current, total, msg, start_time, position):
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
 
-    progress_bar = "[" + "■" * int((current / total) * 20) + "□" * (20 - int((current / total) * 20)) + "]"
+    progress_bar = "[" + "â– " * int((current / total) * 20) + "â–¡" * (20 - int((current / total) * 20)) + "]"
     progress_text = (
         f"**Task is being Processed!**\n"
         f"{progress_bar} {current / total * 100:.2f}%\n"
-        f"┠ **Processed:** {sizeof_fmt(current)} of {sizeof_fmt(total)}\n"
-        f"┠ **Status:** #Cola\n"
-        f"┠ **Posición:** #{position}\n"
-        f"┠ **ETA:** {eta_fmt(eta)}\n"
-        f"┠ **Speed:** {sizeof_fmt(speed)}/s\n"
-        f"┠ **Elapsed:** {eta_fmt(elapsed)}\n"
-     #   f"┖ **Engine:** Hackeroto2C\n"
+        f"â”  **Processed:** {sizeof_fmt(current)} of {sizeof_fmt(total)}\n"
+        f"â”  **Status:** #Cola\n"
+        f"â”  **PosiciÃ³n:** #{position}\n"
+        f"â”  **ETA:** {eta_fmt(eta)}\n"
+        f"â”  **Speed:** {sizeof_fmt(speed)}/s\n"
+        f"â”  **Elapsed:** {eta_fmt(elapsed)}\n"
+     #   f"â”– **Engine:** Hackeroto2C\n"
     )
     if seg != localtime().tm_sec:
         try:
            await msg.edit(progress_text)
         except:pass
     seg = localtime().tm_sec
+    
 
-# Función para manejar la cola de descargas
+# FunciÃ³n para manejar la cola de descargas
 async def process_download_queue():
     global download_in_progress
-    try:
-        while download_queue:
-            download_in_progress = True
-            task = download_queue.popleft()
-            try:
-                await task
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                print(f"Error en la descarga: {e}")
-    finally:
-        download_in_progress = False
+    while download_queue:
+        download_in_progress = True
+        task = download_queue.popleft()
+        await task
+    download_in_progress = False
 
-# Función para agregar una tarea a la cola
+# FunciÃ³n para agregar una tarea a la cola
 async def add_to_queue(client: Client, message: Message, username: str, send):
     user_id = message.chat.id
     position = len(download_queue) + 1
-    msg = await send(f"**Tu archivo ha sido añadido a la cola.\nPosición: #{position}**", quote=True)
+    msg = await send(f"**Tu archivo ha sido aÃ±adido a la cola.\nPosiciÃ³n: #{position}**", quote=True)
 
-    download_queue.append(process_download(client, message, username, send))
+    async def download_task():
+        await process_download(client, message, username, send)
+    
+    download_queue.append(download_task())
     if not download_in_progress:
-        try:
-            await process_download_queue()
-        except Exception as e:
-            print(f"Error en la cola de descargas: {e}")
+        asyncio.create_task(process_download_queue())
 
-# Función para descargar archivos desde enlaces directos
+# FunciÃ³n para descargar archivos desde enlaces directos
 async def download_from_url(msg, client: Client, message: Message, url: str, username: str):
     try:
         async with aiohttp.ClientSession() as session:
@@ -339,15 +281,15 @@ async def download_from_url(msg, client: Client, message: Message, url: str, use
 
 # Manejador para enlaces directos
 async def progress_callback(current, total, message, start_time):
-    """Función de callback para mostrael progreso de subida."""
+    """FunciÃ³n de callback para mostrael progreso de subida."""
     global seg
     now = time()
     user_id = message.chat.id
     diff = now - start_time
     if diff == 0:
         return
-    if user_id in cancel_uploads and cancel_uploads[user_id]:  # Verifica si el usuario canceló
-        await message.edit("**🚫  Subida cancelada  🚫**")
+    if user_id in cancel_uploads and cancel_uploads[user_id]:  # Verifica si el usuario cancelÃ³
+        await message.edit("**ðŸš«  Subida cancelada  ðŸš«**")
         return
     speed = current / diff
     percent = current * 100 / total
@@ -357,8 +299,8 @@ async def progress_callback(current, total, message, start_time):
     total_human = convert_bytes_to_human(total)
     progress_text = f"""
     **Subiendo...**
-    **┠ Processed:** {uploaded_human} of {total_human} | {percent:.2f}%
-    **┠ Speed:** {speed_human}/s
+    **â”  Processed:** {uploaded_human} of {total_human} | {percent:.2f}%
+    **â”  Speed:** {speed_human}/s
     """
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data=f"cancel_upload_{user_id}")]])
     if seg != localtime().tm_sec:
@@ -378,6 +320,56 @@ def convert_bytes_to_human(size):
     else:
         return f"{size / (1024 * 1024 * 1024):.2f} GB"
 
+async def handle_callback_query(client, callback_query):
+    user_id = callback_query.from_user.id    
+    if callback_query.data == f"cancel_upload_{user_id}":
+        cancel_uploads[user_id] = True
+        await callback_query.answer("ðŸš«Task canceledðŸš«")
+        return
+    elif callback_query.data == f"cancel_uploa_{user_id}":
+        cancel_upload[user_id] = True
+        await callback_query.answer("ðŸš«Task canceledðŸš«")
+        return
+    elif callback_query.data == "verify_membership":
+        try:
+            # Verificar si el usuario ya estÃ¡ verificado en la base de datos
+            user_data = await db.users.find_one({"user_id": user_id})
+            current_time = datetime.utcnow()
+            
+            if user_data and user_data.get("channels_verified") and \
+               (current_time - user_data["last_verification"]) < timedelta(minutes=30):
+                # Si estÃ¡ verificado y la verificaciÃ³n es reciente, no volver a verificar
+                await callback_query.answer("âœ… Â¡Ya estÃ¡s verificado! Puedes usar el bot.", show_alert=True)
+                await callback_query.message.delete()
+                return
+
+            # Si no estÃ¡ verificado o la verificaciÃ³n es antigua, verificar nuevamente
+            is_member, not_joined_channels = await verify_user_membership(client, user_id)
+            
+            if is_member:
+                await callback_query.answer("âœ… Â¡VerificaciÃ³n exitosa! Ya puedes usar el bot.", show_alert=True)
+                # Enviar un mensaje de bienvenida despuÃ©s de verificar
+                welcome_message = (
+                    "Â¡Bienvenido al bot de descargas!\n\n"
+                    "AquÃ­ puedes descargar y subir archivos de manera gratuita.\n\n"
+                )
+                await client.send_message(user_id, welcome_message)
+                await callback_query.message.delete()
+            else:
+                channels_text = "\n".join([f"â€¢ {channel['title']}" for channel in not_joined_channels])
+                await callback_query.answer(
+                    "âŒ Debes unirte a todos los canales requeridos antes de usar el bot.",
+                    show_alert=True
+                )
+                await callback_query.message.edit_text(
+                    f"â—ï¸ AÃºn no te has unido a los siguientes canales:\n\n{channels_text}\n\n"
+                    "Por favor, Ãºnete a todos los canales y presiona 'Verificar âœ…' nuevamente.",
+                    reply_markup=callback_query.message.reply_markup
+                )
+        except Exception as e:
+            print(f"Error en verificaciÃ³n: {str(e)}")
+            await callback_query.answer("âŒ Error al verificar la membresÃ­a. Intenta de nuevo.", show_alert=True)
+
 def files_formatter(path, username):
     filespath = Path(path)
     result = sorted([p.name for p in filespath.glob("*") if p.is_file()])
@@ -388,17 +380,17 @@ def files_formatter(path, username):
     final = dirc + result
 
     if not final:
-        msg += f'`➣➣Tolal Storage: {sizeof_fmt(sizee)}`\n\n'
+        msg += f'`âž£âž£Tolal Storage: {sizeof_fmt(sizee)}`\n\n'
         return msg, final
     for i, n in enumerate(final):
         sizee += Path(path, n).stat().st_size
-    msg += f'`➣➣Tolal Storage: {sizeof_fmt(sizee)}`\n\n'
+    msg += f'`âž£âž£Tolal Storage: {sizeof_fmt(sizee)}`\n\n'
     for i, n in enumerate(final):
         size = Path(path, n).stat().st_size   
         if not "." in n:
-            msg += f"{i} 📂 `{n}`\n"
+            msg += f"{i} ðŸ“‚ `{n}`\n"
         else:
-            msg += f"{i} `📃 {n} | {sizeof_fmt(size)}`\n"
+            msg += f"{i} `ðŸ“ƒ {n} | {sizeof_fmt(size)}`\n"
     return msg, final
 
 
@@ -427,13 +419,13 @@ def limpiar_texto(filename):
     # Normalizar tildes y caracteres especiales
     nombre = unicodedata.normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('ASCII')
     
-    # Eliminar caracteres especiales (excepto letras, números, espacios y guiones)
+    # Eliminar caracteres especiales (excepto letras, nÃºmeros, espacios y guiones)
     nombre = re.sub(r'[^\w\s.-]', '', nombre)
     
     # Reemplazar espacios en blanco por guiones
     nombre = nombre.replace(' ', '-')
     
-    # Convertir a minúsculas (opcional)
+    # Convertir a minÃºsculas (opcional)
     nombre = nombre.lower()
     texto_limpio = nombre
     return texto_limpio
@@ -441,7 +433,7 @@ def limpiar_texto(filename):
 def limpiar_textoj(texto):
     # Diccionario de reemplazos
     reemplazos = str.maketrans(
-        'áéíúñÁÉÍÚÑ',
+        'Ã¡Ã©Ã­ÃºÃ±ÃÃ‰ÃÃšÃ‘',
         'aeiunAEIUN'
     )
     texto_limpio = re.sub(r'[^\w\s]', '', texto).translate(reemplazos).replace(' ', '_')
@@ -460,7 +452,7 @@ def update_progress_bar(chunk, filesize, bar_length=20):
     """Genera una barra de progreso visual."""
     percent = chunk / filesize
     filled_length = int(round(bar_length * percent))
-    bar = '■' * filled_length + '□' * (bar_length - filled_length)+ f" {percent:.2%}"
+    bar = 'â– ' * filled_length + 'â–¡' * (bar_length - filled_length)+ f" {percent:.2%}"
     return bar
   
 def eta_fmt(seconds):
@@ -476,8 +468,8 @@ def eta_fmt(seconds):
 async def downloadmessage_progres(chunk, filesize, filename, start, message):
     global seg
     user_id = message.chat.id
-    if user_id in cancel_upload and cancel_upload[user_id]:  # Verifica si el usuario canceló
-        await message.edit("**Download Stopped!\n┠ Plan: Free\n┠ \n┖ Reason: Cancelled by user!**")
+    if user_id in cancel_upload and cancel_upload[user_id]:  # Verifica si el usuario cancelÃ³
+        await message.edit("**Download Stopped!\nâ”  Plan: Free\nâ”  \nâ”– Reason: Cancelled by user!**")
         return
     now = time()
     diff = now - start
@@ -492,11 +484,11 @@ async def downloadmessage_progres(chunk, filesize, filename, start, message):
     eta = eta_fmt(eta_seconds)
 
     msg = "Task is being Processed!\n"
-    msg += f"┠ File: {filename}\n"
-    msg += f"┃ {update_progress_bar(chunk, filesize, 15)}\n"
-    msg += f"┠ Processed: {processed_size} of {total_size}\n"
-    msg += f"┖ Speed: {speed} | ETA: {eta}\n"
-    msg += f"┠ Status: #TelegramDownload"
+    msg += f"â”  File: {filename}\n"
+    msg += f"â”ƒ {update_progress_bar(chunk, filesize, 15)}\n"
+    msg += f"â”  Processed: {processed_size} of {total_size}\n"
+    msg += f"â”– Speed: {speed} | ETA: {eta}\n"
+    msg += f"â”  Status: #TelegramDownload"
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data=f"cancel_uploa_{user_id}")]])
     if seg != localtime().tm_sec:
         try:
@@ -522,7 +514,7 @@ async def process_download(client: Client, message: Message, username: str, send
             filename = limpiar_texto(filename)
         except Exception as e:
             filename = str(randint(11111, 999999)) + ".mp4"
-            filesize = 0  # Tamaño desconocido
+            filesize = 0  # TamaÃ±o desconocido
 
         start = time()
         await msg.edit(f"**Iniciando Descarga...**\n\n`{filename}`")
@@ -556,7 +548,7 @@ async def down_media(client: Client, message: Message):
     username = message.from_user.username or str(message.from_user.id)
     await add_to_queue(client, message, username, message.reply)
 
-# Función para formatear el tamaño de archivo
+# FunciÃ³n para formatear el tamaÃ±o de archivo
 def sizeof_fmt(num, suffix='B'):
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
@@ -564,7 +556,7 @@ def sizeof_fmt(num, suffix='B'):
         num /= 1024.0
     return f"{num:.2f} Yi{suffix}"
 
-# Función para formatear el tiempo
+# FunciÃ³n para formatear el tiempo
 def eta_fmt(seconds):
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -580,40 +572,40 @@ CANAL_ID = -1002534252574  # Reemplaza con el ID de tu canal
 @bot.on_message(filters.command("horario"))
 async def set_time(client, message):
     if message.from_user.id not in ADM:
-        await message.reply("❌ No tienes permiso para usar este comando.")
+        await message.reply("âŒ No tienes permiso para usar este comando.")
         return
         
     try:
         args = message.text.split()
         if len(args) != 2:
-            await message.reply("❌ Uso correcto: /horario HH:MM\nEjemplo: /horario 20:44")
+            await message.reply("âŒ Uso correcto: /horario HH:MM\nEjemplo: /horario 20:44")
             return
             
         time_str = args[1]
         # Validar el formato de la hora
         if not re.match(r'^([01]\d|2[0-3]):([0-5]\d)$', time_str):
-            await message.reply("❌ Formato de hora inválido. Use HH:MM (ejemplo: 20:44)")
+            await message.reply("âŒ Formato de hora invÃ¡lido. Use HH:MM (ejemplo: 20:44)")
             return
             
         # Guardar la hora en una variable global
         global bot_time
         bot_time = time_str
         
-        await message.reply(f"✅ Hora del bot establecida correctamente a las {bot_time}")
+        await message.reply(f"âœ… Hora del bot establecida correctamente a las {bot_time}")
         
     except Exception as e:
-        await message.reply(f"❌ Error al establecer la hora: {str(e)}")
+        await message.reply(f"âŒ Error al establecer la hora: {str(e)}")
 
 @bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
     if message.from_user.id not in ADM:
-        await message.reply("❌ No tienes permiso para usar este comando.")
+        await message.reply("âŒ No tienes permiso para usar este comando.")
         return
     
     try:
         args = message.text.split()
         if len(args) != 4:
-            await message.reply("❌ Uso correcto: /permiso user_id dias GB\nEjemplo: /permiso 1234567890 30 5")
+            await message.reply("âŒ Uso correcto: /permiso user_id dias GB\nEjemplo: /permiso 1234567890 30 5")
             return
         
         user_id = int(args[1])
@@ -636,55 +628,51 @@ async def add_permission(client, message):
             "gb_used": 0
         }
         
-        # Mensajes de confirmación
-        await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
-                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                          f"💾 Límite: {gb_limit}GB")
+        # Mensajes de confirmaciÃ³n
+        await message.reply(f"âœ… Permisos aÃ±adidos para el usuario {user_id}:\n"
+                          f"ðŸ“… Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                          f"ðŸ’¾ LÃ­mite: {gb_limit}GB")
         
         try:
             await bot.send_message(
                 user_id,
-                f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
-                f"📅 Duración: {dias} días\n"
-                f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
-                f"¡Ya puedes empezar a usar el bot! 🚀"
+                f"ðŸŽ‰ Â¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
+                f"ðŸ“… DuraciÃ³n: {dias} dÃ­as\n"
+                f"ðŸ“† Fecha de expiraciÃ³n: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"ðŸ’¾ LÃ­mite de almacenamiento: {gb_limit}GB\n\n"
+                f"Â¡Ya puedes empezar a usar el bot! ðŸš€"
             )
         except Exception as e:
-            await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
+            await message.reply(f"âš ï¸ No se pudo notificar al usuario: {str(e)}")
             
     except Exception as e:
-        await message.reply(f"❌ Error: {str(e)}")
+        await message.reply(f"âŒ Error: {str(e)}")
 
 @bot.on_message(filters.command("unpermiso"))
 async def remove_permission(client, message):
     if message.from_user.id not in ADM:
-        await message.reply("❌ No tienes permiso para usar este comando.")
+        await message.reply("âŒ No tienes permiso para usar este comando.")
         return
 
     try:
         args = message.text.split()
         if len(args) != 2:
-            await message.reply("❌ Uso correcto: /unpermiso user_id\nEjemplo: /unpermiso 1234567890")
+            await message.reply("âŒ Uso correcto: /unpermiso user_id\nEjemplo: /unpermiso 1234567890")
             return
 
         user_id = int(args[1])
-        
-        # Eliminar de la base de datos
-        result = await db.users.delete_one({"user_id": user_id})
-        
-        if result.deleted_count > 0:
-            if user_id in user_permissions:
-                del user_permissions[user_id]
-            await message.reply(f"✅ Permisos eliminados para el usuario {user_id}.")
-            await bot.send_message(user_id, "❌ Tus permisos han sido revocados por el administrador.")
+
+        if user_id in user_permissions:
+            del user_permissions[user_id]
+            await message.reply(f"âœ… Permisos eliminados para el usuario {user_id}.")
+            await bot.send_message(user_id, "âŒ Tus permisos han sido revocados por el administrador.")
         else:
-            await message.reply(f"⚠️ El usuario {user_id} no tiene permisos asignados.")
+            await message.reply(f"âš ï¸ El usuario {user_id} no tiene permisos asignados.")
 
     except Exception as e:
-        await message.reply(f"❌ Error: {str(e)}")
+        await message.reply(f"âŒ Error: {str(e)}")
         
-# Añadir estas funciones después de la definición de `handle_message` (aproximadamente en la línea 494)
+# AÃ±adir estas funciones despuÃ©s de la definiciÃ³n de `handle_message` (aproximadamente en la lÃ­nea 494)
 @bot.on_message(filters.command("mant") & filters.user(ADM))
 async def enable_maintenance(client, message):
     global maintenance_mode
@@ -694,7 +682,7 @@ async def enable_maintenance(client, message):
             await bot.send_message(user, maintenance_message)
         except Exception:
             pass
-    await message.reply("🔧 El bot ahora está en modo mantenimiento. Solo los administradores pueden usarlo.")
+    await message.reply("ðŸ”§ El bot ahora estÃ¡ en modo mantenimiento. Solo los administradores pueden usarlo.")
 
 @bot.on_message(filters.command("mantoff") & filters.user(ADM))
 async def disable_maintenance(client, message):
@@ -702,10 +690,10 @@ async def disable_maintenance(client, message):
     maintenance_mode = False
     for user in downlist.keys():
         try:
-            await bot.send_message(user, "✅ El bot ya no está en mantenimiento. Puedes usarlo con normalidad.")
+            await bot.send_message(user, "âœ… El bot ya no estÃ¡ en mantenimiento. Puedes usarlo con normalidad.")
         except Exception:
             pass
-    await message.reply("🔧 El bot ha salido del modo mantenimiento.")
+    await message.reply("ðŸ”§ El bot ha salido del modo mantenimiento.")
     
 @bot.on_message(filters.private)
 async def handle_message(client, message):
@@ -716,9 +704,9 @@ async def handle_message(client, message):
         await message.reply_text(maintenance_message)
         return
     
-    # Los administradores no necesitan verificación
+    # Los administradores no necesitan verificaciÃ³n
     if user_id not in ADM:
-        # Verificar membresía en canales
+        # Verificar membresÃ­a en canales
         is_member = await verify_user_membership(client, user_id)
         if not is_member:
             await show_join_channels_message(message)
@@ -730,7 +718,7 @@ async def handle_message(client, message):
     elif user_id in user_permissions:  # Verificar si el usuario tiene permisos
         # Verificar si los permisos han expirado
         if datetime.now() > user_permissions[user_id]["expiry_date"]:
-            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
+            await message.reply_text("âš ï¸ Tu tiempo de acceso ha expirado.")
             return
     else:
         # Usuario sin permisos
@@ -738,23 +726,23 @@ async def handle_message(client, message):
             [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
         ])
         await message.reply_text(
-            "⛔️ No tienes permiso para usar este bot.",
+            "â›”ï¸ No tienes permiso para usar este bot.",
             reply_markup=keyboard
         )
         return
         
         # Verificar si los permisos han expirado
         if datetime.now() > user_permissions[user_id]["expiry_date"]:
-            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
+            await message.reply_text("âš ï¸ Tu tiempo de acceso ha expirado.")
             return
         
-        # Verificar límite de GB (solo para comandos de subida)
+        # Verificar lÃ­mite de GB (solo para comandos de subida)
         if message.text and message.text.startswith('/up'):
             if user_permissions[user_id]["gb_used"] >= user_permissions[user_id]["gb_limit"]:
-                await message.reply_text("⚠️ Has alcanzado tu límite de almacenamiento.")
+                await message.reply_text("âš ï¸ Has alcanzado tu lÃ­mite de almacenamiento.")
                 return
     
-    # Continuar con el código original del handle_message
+    # Continuar con el cÃ³digo original del handle_message
     username = message.from_user.username or str(user_id)
     mss = message.text
         
@@ -769,8 +757,8 @@ async def handle_message(client, message):
     if message.text.startswith('/start'):
         # Mensaje de bienvenida con botones
         welcome_message = (
-            "¡Bienvenido al bot de descargas!\n\n"
-            "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
+            "Â¡Bienvenido al bot de descargas!\n\n"
+            "AquÃ­ puedes descargar y subir archivos de manera gratuita.\n\n"
         )
         # Enviar el mensaje con los botones
         await message.reply_text(welcome_message)   
@@ -788,12 +776,12 @@ async def handle_message(client, message):
             msgh = files_formatter(str(root[username]["actual_root"]),username)
             path = str(root[username]["actual_root"]+"/")+msgh[1][i]
             start_time = time() # Guarda el tiempo de inicio
-            msg = await message.reply_text("Iniciando subida...")  # Envía un mensaje de inicio
+            msg = await message.reply_text("Iniciando subida...")  # EnvÃ­a un mensaje de inicio
             await client.send_document(
                 username,
                 document=path,
                 caption=f"Archivo subido por {username}.",
-                progress=progress_callback,  # Función callback para el progreso
+                progress=progress_callback,  # FunciÃ³n callback para el progreso
                 progress_args=(msg,start_time)  # Pasamos el mensaje y el tiempo de inicio
             )
             cancel_uploads[user_id] = False
@@ -827,9 +815,9 @@ async def handle_message(client, message):
         url = message.text # Obtener la URL del video de YouTube
         info = await obtener_info_video(url)
         if not info:
-            await message.reply_text("No se pudo obtener la información del video.")
+            await message.reply_text("No se pudo obtener la informaciÃ³n del video.")
             return
-        # Mostrar la información del video y los botones de calidad
+        # Mostrar la informaciÃ³n del video y los botones de calidad
         await mostrar_info_video(client, message, info, url)
 
     elif "www.instagram.com" in mss:
@@ -852,21 +840,21 @@ async def handle_message(client, message):
         
     elif "/help" in mss:
         help_message = """
-        **📚 Guía Completa del Bot 🤖**
+        **ðŸ“š GuÃ­a Completa del Bot ðŸ¤–**
 
-        Para ver una explicación detallada de todos los comandos y funcionalidades del bot, visita la siguiente página:
+        Para ver una explicaciÃ³n detallada de todos los comandos y funcionalidades del bot, visita la siguiente pÃ¡gina:
 
-        ¡Gracias por usar nuestro bot! 🤖
+        Â¡Gracias por usar nuestro bot! ðŸ¤–
         """
 
-    # Crear el botón con la URL
+    # Crear el botÃ³n con la URL
         keyboard = InlineKeyboardMarkup(
             [
-            [InlineKeyboardButton("📖 Ver Guía Completa", url="https://telegra.ph/Gu%C3%ADa-Completa-del-Bot-02-25")]
+            [InlineKeyboardButton("ðŸ“– Ver GuÃ­a Completa", url="https://telegra.ph/Gu%C3%ADa-Completa-del-Bot-02-25")]
             ]
         )
 
-    # Enviar el mensaje con el botón
+    # Enviar el mensaje con el botÃ³n
         await bot.send_message(
             username,
             help_message,
@@ -900,7 +888,7 @@ async def handle_message(client, message):
     elif '/move' in mss:
         try:
             list = message.text.split(" ")[1]
-            des = message.text.split(" ")[2]  # Suponiendo que la carpeta de destino está en el mensaje
+            des = message.text.split(" ")[2]  # Suponiendo que la carpeta de destino estÃ¡ en el mensaje
         except:
             await bot.send_message(username, f"**La forma correcta de utilizar el comando es /move archivo carpeta (sus numeros correspondientes)**")
             return
@@ -986,7 +974,7 @@ async def handle_message(client, message):
 
         zipssize = 1024 * 1024 * int(zips)
         msg = await bot.send_message(username, "Comprimiendo")
-        # Llama a la función sevenzip, asegurándote de que pueda manejar grupos de archivos
+        # Llama a la funciÃ³n sevenzip, asegurÃ¡ndote de que pueda manejar grupos de archivos
         files = sevenzip(path, volume=zipssize)
         await msg.edit("Archivo o carpeta comprimido")
         return
@@ -1011,7 +999,7 @@ async def handle_message(client, message):
                                          (updated_info, user_id))
                             await conn.commit()
         
-        await msg.edit(f"**Tamaño de zips establecido en {a} **")
+        await msg.edit(f"**TamaÃ±o de zips establecido en {a} **")
     
     elif message.text.startswith('/proxy'):
         msg = await bot.send_message(username, 'Por Favor espere')
@@ -1079,7 +1067,7 @@ async def handle_message(client, message):
                                          (updated_info, user_id))
                             await conn.commit()
         
-        await msg.edit(f"**Datos Guardados✅\n\nhost: {a}\nUser: {b}\nPasw:{c}\nID Art: {e}**")
+        await msg.edit(f"**Datos Guardadosâœ…\n\nhost: {a}\nUser: {b}\nPasw:{c}\nID Art: {e}**")
 
     elif message.text.startswith('/set_data'):
         try:
@@ -1094,7 +1082,7 @@ async def handle_message(client, message):
             GLOBAL_DATA["id_art"] = args[4]
             GLOBAL_DATA["cookie"] = args[5]
 
-            await message.reply("✅ Datos globales actualizados correctamente.")
+            await message.reply("âœ… Datos globales actualizados correctamente.")
         except Exception as e:
             await message.reply(f"Error: {str(e)}")
 
@@ -1121,16 +1109,16 @@ async def handle_message(client, message):
 
     elif "/files_del" in mss:
         usid = user_id
-        msg = await bot.send_message(username, "Por Favor Espere⏳...")
+        msg = await bot.send_message(username, "Por Favor Espereâ³...")
         await deletecloud(bot, usid, msg, username)
     elif '/up' in mss:
         for path in selected_files:
             await upload_rev(bot, path, usid, msg, username)
-            # Añadir esta línea después de cada subida exitosa
+            # AÃ±adir esta lÃ­nea despuÃ©s de cada subida exitosa
             await update_user_storage(user_id, os.path.getsize(path))
         id_path[username] = {"id": "", "user_id": ""}
         try:
-            msg = await bot.send_message(username, "Por Favor Espere⏳...")
+            msg = await bot.send_message(username, "Por Favor Espereâ³...")
             range_str = message.text.split(" ")[1]
             range_parts = range_str.split("-")
             start = int(range_parts[0])
@@ -1150,7 +1138,7 @@ async def handle_message(client, message):
             size = os.path.getsize(path)/(1024 * 1024)
        
         if len(selected_files) == 0:
-            await msg.edit(" No se encontraron archivos en el rango especificado.**\nTenga en cuenta que el comando se usa:\n/up_#nombre_del_archivo para un archivo simple\nPor rango /up_#archivo1-#archivo2 ej: /up_0-5 ahí se subirán los archivos del 0 al 5 del servidor a la nube.")
+            await msg.edit(" No se encontraron archivos en el rango especificado.**\nTenga en cuenta que el comando se usa:\n/up_#nombre_del_archivo para un archivo simple\nPor rango /up_#archivo1-#archivo2 ej: /up_0-5 ahÃ­ se subirÃ¡n los archivos del 0 al 5 del servidor a la nube.")
             return
         elif len(selected_files) == 1:
             file_name = os.path.basename(selected_files[0])
@@ -1210,11 +1198,11 @@ def uploadfile_progres(chunk, filesize, start, filename, message):
     
     # Construimos el mensaje con el formato deseado
     msg = "Task is being Processed!\n"
-    msg += f"┠ File: {filename}\n"
-    msg += f"┃ {update_progress_bar(chunk, filesize, 15)}\n"
-    msg += f"┠ Processed: {sizeof_fmt(chunk)} of {sizeof_fmt(filesize)}\n"
-    msg += f"┖ Speed: {sizeof_fmt(mbs)}/s | ETA: {eta_formatted}\n"
-    msg += f"┠ Status: #TelegramUploadCloud"
+    msg += f"â”  File: {filename}\n"
+    msg += f"â”ƒ {update_progress_bar(chunk, filesize, 15)}\n"
+    msg += f"â”  Processed: {sizeof_fmt(chunk)} of {sizeof_fmt(filesize)}\n"
+    msg += f"â”– Speed: {sizeof_fmt(mbs)}/s | ETA: {eta_formatted}\n"
+    msg += f"â”  Status: #TelegramUploadCloud"
     
     if seg != localtime().tm_sec: 
         message.edit(msg)
@@ -1283,7 +1271,7 @@ def download_videos(urls, download_folder, message):
         total_size = int(request.urlopen(url).info().get("Content-Length", -1))
         print(total_size)
         if total_size == -1:
-            raise ValueError("No se pudo obtener el tamaño del archivo.")
+            raise ValueError("No se pudo obtener el tamaÃ±o del archivo.")
 
         request.urlretrieve(url, download_dest, lambda blocks, block_size, total_size: download_progress(blocks, block_size, total_size, message))
 
@@ -1303,7 +1291,7 @@ async def download_and_send(client, message, url, path):
         download_path = await asyncio.get_running_loop().run_in_executor(None, handle_download, url, path, progress_message)
 
         if download_path:
-            await message.reply_text("¡Video descargado!")
+            await message.reply_text("Â¡Video descargado!")
             await progress_message.delete()  # Opcional: eliminar el mensaje de progreso
         else:
             await message.reply_text("Hubo un error al descargar el video.")
@@ -1315,7 +1303,7 @@ async def download_and_send(client, message, url, path):
 @bot.on_message(filters.command("mant"))
 async def enable_maintenance(client, message):
     if message.from_user.id not in ADM:
-        await message.reply("❌ No tienes permiso para usar este comando.")
+        await message.reply("âŒ No tienes permiso para usar este comando.")
         return
         
     global maintenance_mode
@@ -1325,12 +1313,12 @@ async def enable_maintenance(client, message):
             await bot.send_message(user, maintenance_message)
         except Exception:
             pass
-    await message.reply("🔧 El bot ahora está en modo mantenimiento. Solo los administradores pueden usarlo.")
+    await message.reply("ðŸ”§ El bot ahora estÃ¡ en modo mantenimiento. Solo los administradores pueden usarlo.")
 
 @bot.on_message(filters.command("mantoff"))
 async def disable_maintenance(client, message):
     if message.from_user.id not in ADM:
-        await message.reply("❌ No tienes permiso para usar este comando.")
+        await message.reply("âŒ No tienes permiso para usar este comando.")
         return
         
 async def update_user_storage(user_id, file_size):
@@ -1343,102 +1331,20 @@ async def update_user_storage(user_id, file_size):
     maintenance_mode = False
     for user in downlist.keys():
         try:
-            await bot.send_message(user, "✅ El bot ya no está en mantenimiento. Puedes usarlo con normalidad.")
+            await bot.send_message(user, "âœ… El bot ya no estÃ¡ en mantenimiento. Puedes usarlo con normalidad.")
         except Exception:
             pass
-    await message.reply("🔧 El bot ha salido del modo mantenimiento.")
+    await message.reply("ðŸ”§ El bot ha salido del modo mantenimiento.")
 
-async def handle_callback_query(client, callback_query):
-    user_id = callback_query.from_user.id    
-    if callback_query.data == f"cancel_upload_{user_id}":
-        cancel_uploads[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
-        return
-    elif callback_query.data == f"cancel_uploa_{user_id}":
-        cancel_upload[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
-        return
-    elif callback_query.data == "verify_membership":
-        try:
-            # Verificar si el usuario ya está verificado en la base de datos
-            user_data = await db.users.find_one({"user_id": user_id})
-            current_time = datetime.utcnow()
-            
-            if user_data and user_data.get("channels_verified") and \
-               (current_time - user_data["last_verification"]) < timedelta(minutes=30):
-                await callback_query.answer("✅ ¡Ya estás verificado! Puedes usar el bot.", show_alert=True)
-                await callback_query.message.delete()
-                return
-
-            is_member, not_joined_channels = await verify_user_membership(client, user_id)
-            
-            if is_member:
-                await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.", show_alert=True)
-                welcome_message = (
-                    "¡Bienvenido al bot de descargas!\n\n"
-                    "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
-                )
-                await client.send_message(user_id, welcome_message)
-                await callback_query.message.delete()
-            else:
-                channels_text = "\n".join([f"• {channel['title']}" for channel in not_joined_channels])
-                await callback_query.answer(
-                    "❌ Debes unirte a todos los canales requeridos antes de usar el bot.",
-                    show_alert=True
-                )
-                await callback_query.message.edit_text(
-                    f"❗️ Aún no te has unido a los siguientes canales:\n\n{channels_text}\n\n"
-                    "Por favor, únete a todos los canales y presiona 'Verificar ✅' nuevamente.",
-                    reply_markup=callback_query.message.reply_markup
-                )
-        except Exception as e:
-            print(f"Error en verificación: {str(e)}")
-            await callback_query.answer("❌ Error al verificar la membresía. Intenta de nuevo.", show_alert=True)
-    
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()
 
-if __name__ == "__main__":
-    async def main():
-        await init_db()
-        await load_user_permissions_from_db()
-        try:
-            await bot.start()
-            print("✅ Bot iniciado correctamente")
-            await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
-            await bot.idle()
-        except Exception as e:
-            print(f"❌ Error al iniciar el bot: {str(e)}")
-        finally:
-            await bot.stop()
+# Inicializar la base de datos
+asyncio.get_event_loop().run_until_complete(init_db())
 
-    asyncio.run(main())
-
-# Inicializar el bot
-async def init_bot():
-    await init_db()
-    await load_user_permissions_from_db()
-    try:
-        await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
-    except Exception as e:
-        print(f"No se pudo enviar el mensaje inicial: {e}")
-    print("Bot Iniciado")
-
-# Ejecutar la inicialización
-asyncio.get_event_loop().run_until_complete(init_bot())
+try:
+    bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadÃ­a**')
+except Exception as e:
+    print(f"No se pudo enviar el mensaje inicial: {e}")
+print("Bot Iniciado")
 bot.loop.run_forever()
-
-# Función principal de manejo de callbacks
-
-if __name__ == "__main__":
-    # Agregar el handler de callbacks
-    bot.add_handler(CallbackQueryHandler(handle_callback_query))
-    
-    # Iniciar el bot
-    bot.start()
-    
-    # Ejecutar la inicialización
-    asyncio.get_event_loop().run_until_complete(init_bot())
-    
-    # Ejecutar el loop de eventos
-    bot.loop.run_forever()
