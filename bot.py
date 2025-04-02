@@ -713,7 +713,7 @@ async def disable_maintenance(client, message):
     
 @bot.on_message(filters.private)
 async def handle_message(client, message):
-    user_id = message.from_user.id
+    # Aquí debe estar todo el código de manejo de comandos
     
     # Verificar modo mantenimiento antes de cualquier otra cosa
     if maintenance_mode and user_id not in ADM:
@@ -920,23 +920,23 @@ async def handle_message(client, message):
             path_to_move = str(root[username]["actual_root"]) + "/" + msgh[1][int(list)]
             destination_path = str(root[username]["actual_root"]) + "/" + msgh[1][int(des)]
 
-        # Verificar si el archivo existe
+            # Verificar si el archivo existe
             if not os.path.isfile(path_to_move):
                 await bot.send_message(username, "El archivo especificado no existe.")
                 return
 
-        # Verificar si la carpeta de destino existe, si no, crearla
+            # Verificar si la carpeta de destino existe, si no, crearla
             if not os.path.exists(destination_path):
                 os.makedirs(destination_path)
 
-        # Mover el archivo
+            # Mover el archivo
             shutil.move(path_to_move, destination_path)
             await bot.send_message(username, f"El archivo ha sido movido a {destination_path}")
         
         except Exception as ex:
             await bot.send_message(username, str(ex))
             
-        elif '/rdir' in mss:
+    elif '/rdir' in mss:
         list = message.text.split("_")[1]
         filespath = Path(str(root[username]["actual_root"]) + "/")
         msgh = files_formatter(str(root[username]["actual_root"]), username)
