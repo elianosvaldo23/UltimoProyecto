@@ -1372,3 +1372,20 @@ async def load_user_permissions_from_db():
         print("✅ Permisos de usuarios cargados desde la base de datos")
     except Exception as e:
         print(f"❌ Error cargando permisos de usuarios: {str(e)}")
+
+# Inicializar el bot
+async def init_bot():
+    await init_db()
+    await load_user_permissions_from_db()
+    try:
+        await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
+    except Exception as e:
+        print(f"No se pudo enviar el mensaje inicial: {e}")
+    print("Bot Iniciado")
+
+bot.add_handler(CallbackQueryHandler(handle_callback_query))
+bot.start()
+
+# Ejecutar la inicialización
+asyncio.get_event_loop().run_until_complete(init_bot())
+bot.loop.run_forever()
