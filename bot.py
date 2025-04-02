@@ -54,6 +54,7 @@ maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténta
 ADMIN_ID = 1742433244  # ID del administrador principal
 ADM = [1742433244]    # Lista de IDs de administradores
 user_permissions = {}  # Diccionario para almacenar permisos de usuarios
+bot_time = "00:00"    # Variable para almacenar la hora del bot
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -435,6 +436,33 @@ from pyrogram.errors import UserNotParticipant
 
 # ID del canal al que los usuarios deben unirse
 CANAL_ID = -1002534252574  # Reemplaza con el ID de tu canal
+
+@bot.on_message(filters.command("horario"))
+async def set_time(client, message):
+    if message.from_user.id not in ADM:
+        await message.reply("❌ No tienes permiso para usar este comando.")
+        return
+        
+    try:
+        args = message.text.split()
+        if len(args) != 2:
+            await message.reply("❌ Uso correcto: /horario HH:MM\nEjemplo: /horario 20:44")
+            return
+            
+        time_str = args[1]
+        # Validar el formato de la hora
+        if not re.match(r'^([01]\d|2[0-3]):([0-5]\d)$', time_str):
+            await message.reply("❌ Formato de hora inválido. Use HH:MM (ejemplo: 20:44)")
+            return
+            
+        # Guardar la hora en una variable global
+        global bot_time
+        bot_time = time_str
+        
+        await message.reply(f"✅ Hora del bot establecida correctamente a las {bot_time}")
+        
+    except Exception as e:
+        await message.reply(f"❌ Error al establecer la hora: {str(e)}")
 
 @bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
