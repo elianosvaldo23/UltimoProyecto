@@ -115,22 +115,6 @@ async def update_user_storage_db(user_id: int, file_size: int):
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
-async def save_user_root_to_db(user_id: str, root_data: dict):
-    await db.user_roots.update_one(
-        {"user_id": user_id},
-        {"$set": {
-            "root_data": root_data,
-            "updated_at": datetime.utcnow()
-        }},
-        upsert=True
-    )
-
-async def load_user_root_from_db(user_id: str):
-    data = await db.user_roots.find_one({"user_id": user_id})
-    if data:
-        return data["root_data"]
-    return {"actual_root": f"downloads/{user_id}"}
-
 async def verify_user_membership(client, user_id):
     """Verifica si el usuario es miembro de todos los canales requeridos."""
     not_joined_channels = []
@@ -713,21 +697,12 @@ async def disable_maintenance(client, message):
     
 @bot.on_message(filters.private)
 async def handle_message(client, message):
-    # Aquí debe estar todo el código de manejo de comandos
+    user_id = message.from_user.id
     
     # Verificar modo mantenimiento antes de cualquier otra cosa
     if maintenance_mode and user_id not in ADM:
         await message.reply_text(maintenance_message)
         return
-
-    # Cargar datos del usuario desde MongoDB
-    user_data = await get_user_from_db(user_id)
-    if user_data:
-        user_permissions[user_id] = {
-            "expiry_date": user_data["expiry_date"],
-            "gb_limit": user_data["gb_limit"],
-            "gb_used": user_data["gb_used"]
-        }
     
     # Los administradores no necesitan verificación
     if user_id not in ADM:
@@ -767,13 +742,18 @@ async def handle_message(client, message):
                 await message.reply_text("⚠️ Has alcanzado tu límite de almacenamiento.")
                 return
     
-        # Continuar con el código original del handle_message
+    # Continuar con el código original del handle_message
     username = message.from_user.username or str(user_id)
     mss = message.text
         
-    if username not in root:  # Nivel correcto de indentación
-        root[username] = await load_user_root_from_db(username)
+    if username not in downlist:
+        downlist[username] = []
+    if username not in root:
+        root[username] = {"actual_root": f"downloads/{username}"}
 
+  #  if username not in USERS or username not in ADM:
+  #      await message.reply_text("No tienes acceso a este Bot\nContacta a @Stvz20")
+    
     if message.text.startswith('/start'):
         # Mensaje de bienvenida con botones
         welcome_message = (
@@ -781,8 +761,7 @@ async def handle_message(client, message):
             "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
         )
         # Enviar el mensaje con los botones
-        await message.reply_text(welcome_message)
-        
+        await message.reply_text(welcome_message)   
     elif '/wget' in mss:
         try:
             list = message.text.split(" ")[1]
@@ -920,16 +899,16 @@ async def handle_message(client, message):
             path_to_move = str(root[username]["actual_root"]) + "/" + msgh[1][int(list)]
             destination_path = str(root[username]["actual_root"]) + "/" + msgh[1][int(des)]
 
-            # Verificar si el archivo existe
+        # Verificar si el archivo existe
             if not os.path.isfile(path_to_move):
                 await bot.send_message(username, "El archivo especificado no existe.")
                 return
 
-            # Verificar si la carpeta de destino existe, si no, crearla
+        # Verificar si la carpeta de destino existe, si no, crearla
             if not os.path.exists(destination_path):
                 os.makedirs(destination_path)
 
-            # Mover el archivo
+        # Mover el archivo
             shutil.move(path_to_move, destination_path)
             await bot.send_message(username, f"El archivo ha sido movido a {destination_path}")
         
@@ -953,7 +932,6 @@ async def handle_message(client, message):
         except Exception as ex:
             await bot.send_message(username, str(ex))
             
-    # Corregir el bloque mkdir
     elif '/mkdir' in mss:
         name = message.text.split(" ")[1]
         if "." in name or "/" in name or "*" in name:
@@ -962,9 +940,9 @@ async def handle_message(client, message):
         rut = root[username]["actual_root"]
         try:
             os.mkdir(f"{rut}/{name}")
-            await save_user_root_to_db(username, root[username])
         except Exception as a:
             await bot.send_message(username, a)
+        await bot.send_message(username, f"**Carpeta Creada**\n\n`/{name}`")
         msg = files_formatter(str(root[username]["actual_root"]),username)
         await limite_msg(msg[0],username)
         
