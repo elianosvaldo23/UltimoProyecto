@@ -63,6 +63,34 @@ REQUIRED_CHANNELS = [
     {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
 ]
 
+async def verify_user_membership(client, user_id):
+    """Verifica si un usuario es miembro de todos los canales requeridos."""
+    is_member = True
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await client.get_chat_member(channel["id"], user_id)
+            if member.status not in ["member", "administrator", "creator"]:
+                is_member = False
+                break
+        except Exception:
+            is_member = False
+            break
+    return is_member
+
+async def show_join_channels_message(message):
+    """Muestra el mensaje para unirse a los canales requeridos."""
+    channels_text = "\n".join([f"- {channel['title']}" for channel in REQUIRED_CHANNELS])
+    
+    text = (
+        "❗️ Para usar el bot, debes unirte a nuestros canales:\n\n"
+        f"{channels_text}\n\n"
+        "1️⃣ Únete a los canales usando los botones de abajo\n"
+        "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido"
+    )
+    
+    keyboard = get_channels_keyboard([channel['title'] for channel in REQUIRED_CHANNELS])
+    await message.reply_text(text, reply_markup=keyboard)
+    
 def load_user_data():
     conn = sqlite3.connect(db.db_file)
     c = conn.cursor()
@@ -701,11 +729,31 @@ async def handle_message(client, message):
 
  
     if message.text.startswith('/start'):
-        # Mensaje de bienvenida con botones
-        welcome_message = (
-            "¡Bienvenido al bot de descargas!\n\n"
-            "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
-        )
+    # Mensaje de bienvenida con botones
+    welcome_message = (
+        "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
+        "Aquí puedes:\n"
+        "📥 Descargar archivos\n"
+        "📤 Subir archivos\n"
+        "📂 Gestionar tus archivos\n\n"
+        "🔰 Para comenzar:\n"
+        "1. Únete a nuestros canales requeridos\n"
+        "2. Verifica tu membresía\n"
+        "3. ¡Empieza a descargar!\n\n"
+        "📚 Usa /help para ver todos los comandos"
+    )
+    
+    # Crear teclado inline con botones
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
+        [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
+    ])
+    
+    # Verificar si el usuario ya está en la base de datos
+    db.add_user(message.from_user.id, message.from_user.username or "")
+    
+    # Enviar el mensaje con los botones
+    await message.reply_text(welcome_message, reply_markup=keyboard)
         # Enviar el mensaje con los botones
         await message.reply_text(welcome_message)   
     elif '/wget' in mss:
