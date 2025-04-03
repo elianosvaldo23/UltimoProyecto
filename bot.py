@@ -90,58 +90,61 @@ bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
-async def verify_user_membership(client, user_id):
-    """Verifica si el usuario es miembro de todos los canales requeridos."""
-    all_verified = True
-    for channel in REQUIRED_CHANNELS:
-        # Primero verificar en la base de datos
-        if db.is_user_verified(user_id, channel["id"]):
-            continue
-
-        try:
-            member = await client.get_chat_member(channel["id"], user_id)
-            if member.status in ["member", "administrator", "creator"]:
-                # Actualizar la base de datos
-                db.update_channel_verification(user_id, channel["id"])
-            else:
-                all_verified = False
-                break
-        except Exception as e:
-            print(f"Error verificando el canal {channel['title']}: {e}")
-            all_verified = False
-            break
-    return all_verified
-
-async def show_join_channels_message(message):
-    """Muestra el mensaje con los botones para unirse a los canales."""
-    user_id = message.from_user.id
-    username = message.from_user.username or str(user_id)
+async def handle_callback_query(client, callback_query):
+    user_id = callback_query.from_user.id    
     
-    # Registrar usuario en la base de datos si no existe
-    db.add_user(user_id, username)
-    
+    if callback_query.data == "verify_membership":
+        # Verificar acceso del usuario
+        access_ok, access_msg = db.check_user_access(user_id)
+        if not access_ok:
+            await callback_query.answer(f"❌ {access_msg}", show_alert=True)
+            return
+
+        missing_channels = []
+        is_member = True
+        
+        for channel in REQUIRED_CHANNELS:
+            try:
+                member = await client.get_chat_member(channel["id"], user_id)
+                if member.status in ["member", "administrator", "creator"]:
+                    db.update_channel_verification(user_id, channel["id"])
+                else:
+                    is_member = False
+                    missing_channels.append(channel["title"])
+                    db.remove_channel_verification(user_id, channel["id"])
+            except Exception as e:
+                is_member = False
+                missing_channels.append(channel["title"])
+                db.remove_channel_verification(user_id, channel["id"])
+        
+        if is_member:
+            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.", show_alert=True)
+            await callback_query.message.delete()
+        else:
+            channels_text = "\n- ".join(missing_channels)
+            await callback_query.answer("❌ Debes unirte a todos los canales", show_alert=True)
+            await callback_query.message.edit_text(
+                "❗️ Aún faltan canales por unirte:\n\n"
+                f"Canales faltantes:\n- {channels_text}\n\n"
+                "1️⃣ Únete a los canales usando los botones de abajo\n"
+                "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido",
+                reply_markup=get_channels_keyboard(missing_channels)
+            )
+            
+    elif callback_query.data.startswith("cancel_upload_"):
+        cancel_uploads[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
+    elif callback_query.data.startswith("cancel_uploa_"):
+        cancel_upload[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
+
+def get_channels_keyboard(missing_channels):
     buttons = []
     for channel in REQUIRED_CHANNELS:
-        if not db.is_user_verified(user_id, channel["id"]):
+        if channel["title"] in missing_channels:
             buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
-    
-    if not buttons:
-        await message.reply("✅ Ya estás verificado en todos los canales.")
-        return
-        
     buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
-    keyboard = InlineKeyboardMarkup(buttons)
-    
-    await message.reply(
-        "❗️ Para usar el bot, debes unirte a nuestros canales oficiales:\n\n"
-        "1️⃣ Únete a los canales presionando los botones de abajo\n"
-        "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido\n",
-        reply_markup=keyboard
-    )
-    
-# Cola global de descargas
-download_queue = deque()
-download_in_progress = False
+    return InlineKeyboardMarkup(buttons)
 
 # Manejador para la selección de calidad
 @bot.on_callback_query(filters.regex(r"^yt_"))
@@ -559,25 +562,22 @@ async def add_permission(client, message):
         
         user_id = int(args[1])
         dias = int(args[2])
-        gb_limit = float(args[3].replace("gb", ""))
+        gb_limit = float(args[3])
         
-        # Obtener la hora actual del bot
-        current_hour, current_minute = map(int, bot_time.split(':'))
-        now = datetime.now()
-        current_time = now.replace(hour=current_hour, minute=current_minute)
+        # Establecer cuota y fecha de expiración en la base de datos
+        db.set_user_quota(user_id, gb_limit)
+        db.set_expiration_date(user_id, dias)
         
-        # Calcular la fecha de expiración manteniendo la misma hora
-        expiry_date = current_time + timedelta(days=dias)
-        
-        user_permissions[user_id] = {
-        "expiry_date": expiry_date,
-        "upload_limit": gb_limit * 1024 * 1024 * 1024,  # Cambiar gb_limit por upload_limit
-        "gb_used": 0
-        }
+        # Obtener la fecha de expiración
+        conn = sqlite3.connect(db.db_file)
+        c = conn.cursor()
+        c.execute('SELECT expiration_date FROM users WHERE user_id = ?', (user_id,))
+        expiry_date = c.fetchone()[0]
+        conn.close()
         
         # Mensaje para el administrador
         await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
-                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                          f"📅 Expira: {expiry_date}\n"
                           f"💾 Límite: {gb_limit}GB")
         
         # Notificar al usuario
