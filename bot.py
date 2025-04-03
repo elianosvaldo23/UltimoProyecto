@@ -694,17 +694,17 @@ async def handle_message(client, message):
         root[username] = {"actual_root": f"downloads/{username}"}
         
     if message.text.startswith('/start'):
-    welcome_message = (
-        "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
-        "Aquí puedes:\n"
-        "📥 Descargar archivos\n"
-        "📤 Subir archivos\n"
-        "📂 Gestionar tus archivos\n\n"
-        "🔰 Para comenzar:\n"
-        "1. Únete a nuestros canales requeridos\n"
-        "2. Verifica tu membresía\n"
-        "3. ¡Empieza a descargar!\n\n"
-        "📚 Usa /help para ver todos los comandos"
+        welcome_message = (
+            "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
+            "Aquí puedes:\n"
+            "📥 Descargar archivos\n"
+            "📤 Subir archivos\n"
+            "📂 Gestionar tus archivos\n\n"
+            "🔰 Para comenzar:\n"
+            "1. Únete a nuestros canales requeridos\n"
+            "2. Verifica tu membresía\n"
+            "3. ¡Empieza a descargar!\n\n"
+            "📚 Usa /help para ver todos los comandos"
     )
     
     keyboard = InlineKeyboardMarkup([
