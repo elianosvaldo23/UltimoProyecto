@@ -128,51 +128,40 @@ async def handle_callback_query(client, callback_query):
             await callback_query.answer(f"❌ {access_msg}", show_alert=True)
             return
 
-        missing_channels = []
-        is_member = True
-        
-        for channel in REQUIRED_CHANNELS:
-            try:
-                member = await client.get_chat_member(channel["id"], user_id)
-                if member.status in ["member", "administrator", "creator"]:
-                    db.update_channel_verification(user_id, channel["id"])
-                else:
-                    is_member = False
-                    missing_channels.append(channel["title"])
-                    db.remove_channel_verification(user_id, channel["id"])
-            except Exception as e:
-                is_member = False
-                missing_channels.append(channel["title"])
-                db.remove_channel_verification(user_id, channel["id"])
-        
+        is_member = await verify_user_membership(client, user_id)
         if is_member:
-            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.", show_alert=True)
+            for channel in REQUIRED_CHANNELS:
+                db.update_channel_verification(user_id, channel["id"])
+            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
             await callback_query.message.delete()
         else:
-            channels_text = "\n- ".join(missing_channels)
-            await callback_query.answer("❌ Debes unirte a todos los canales", show_alert=True)
-            await callback_query.message.edit_text(
-                "❗️ Aún faltan canales por unirte:\n\n"
-                f"Canales faltantes:\n- {channels_text}\n\n"
-                "1️⃣ Únete a los canales usando los botones de abajo\n"
-                "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido",
-                reply_markup=get_channels_keyboard(missing_channels)
-            )
+            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
+            missing_channels = []
+            for channel in REQUIRED_CHANNELS:
+                try:
+                    member = await client.get_chat_member(channel["id"], user_id)
+                    if member.status not in ["member", "administrator", "creator"]:
+                        missing_channels.append(channel["title"])
+                except:
+                    missing_channels.append(channel["title"])
             
+            if missing_channels:
+                channels_text = "\n- ".join(missing_channels)
+                await callback_query.message.edit_text(
+                    f"❗️ Aún faltan canales por unirte:\n\n"
+                    f"Canales faltantes:\n- {channels_text}\n\n"
+                    "1️⃣ Únete a los canales usando los botones de abajo\n"
+                    "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido",
+                    reply_markup=get_channels_keyboard(missing_channels)
+                )
+    
     elif callback_query.data.startswith("cancel_upload_"):
         cancel_uploads[user_id] = True
         await callback_query.answer("🚫Task canceled🚫")
+    
     elif callback_query.data.startswith("cancel_uploa_"):
         cancel_upload[user_id] = True
         await callback_query.answer("🚫Task canceled🚫")
-
-def get_channels_keyboard(missing_channels):
-    buttons = []
-    for channel in REQUIRED_CHANNELS:
-        if channel["title"] in missing_channels:
-            buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
-    buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
-    return InlineKeyboardMarkup(buttons)
 
 # Manejador para la selección de calidad
 @bot.on_callback_query(filters.regex(r"^yt_"))
@@ -280,28 +269,6 @@ async def download_from_url(msg, client: Client, message: Message, url: str, use
         await message.reply(f"**Error:** {str(e)}")
         return
 
-# Manejador para enlaces directos
-async def handle_callback_query(client, callback_query):
-    user_id = callback_query.from_user.id    
-    
-    if callback_query.data == "verify_membership":
-        is_member = await verify_user_membership(client, user_id)
-        if is_member:
-            for channel in REQUIRED_CHANNELS:
-                db.update_channel_verification(user_id, channel["id"])
-            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
-            await callback_query.message.delete()
-        else:
-            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
-    elif callback_query.data == f"cancel_upload_{user_id}":
-        cancel_uploads[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
-        return
-    elif callback_query.data == f"cancel_uploa_{user_id}":
-        cancel_upload[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
-        return
-        
     speed = current / diff
     percent = current * 100 / total
     speed_human = convert_bytes_to_human(speed)
@@ -330,24 +297,6 @@ def convert_bytes_to_human(size):
         return f"{size / (1024 * 1024):.2f} MB"
     else:
         return f"{size / (1024 * 1024 * 1024):.2f} GB"
-
-async def handle_callback_query(client, callback_query):
-    user_id = callback_query.from_user.id    
-    if callback_query.data == f"cancel_upload_{user_id}":
-        cancel_uploads[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
-        return
-    elif callback_query.data == f"cancel_uploa_{user_id}":
-        cancel_upload[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
-        return
-    elif callback_query.data == "verify_membership":
-        is_member = await verify_user_membership(client, user_id)
-        if is_member:
-            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
-            await callback_query.message.delete()
-        else:
-            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
 
 def files_formatter(path, username):
     filespath = Path(path)
@@ -592,7 +541,10 @@ async def add_permission(client, message):
         dias = int(args[2])
         gb_limit = float(args[3])
         
-        # Establecer cuota y fecha de expiración en la base de datos
+        # Primero verificar si el usuario existe en la base de datos
+        db.add_user(user_id, "")  # Asegurarse de que el usuario exista en la base de datos
+        
+        # Establecer cuota y fecha de expiración
         db.set_user_quota(user_id, gb_limit)
         db.set_expiration_date(user_id, dias)
         
@@ -600,13 +552,19 @@ async def add_permission(client, message):
         conn = sqlite3.connect(db.db_file)
         c = conn.cursor()
         c.execute('SELECT expiration_date FROM users WHERE user_id = ?', (user_id,))
-        expiry_date = c.fetchone()[0]
+        result = c.fetchone()
         conn.close()
+        
+        if not result:
+            await message.reply("❌ Error: No se pudo establecer la fecha de expiración")
+            return
+            
+        expiry_date = result[0]
         
         # Mensaje para el administrador
         await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
-                          f"📅 Expira: {expiry_date}\n"
-                          f"💾 Límite: {gb_limit}GB")
+                         f"📅 Expira: {expiry_date}\n"
+                         f"💾 Límite: {gb_limit}GB")
         
         # Notificar al usuario
         try:
@@ -614,7 +572,7 @@ async def add_permission(client, message):
                 user_id,
                 f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
                 f"📅 Duración: {dias} días\n"
-                f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"📆 Fecha de expiración: {expiry_date}\n"
                 f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
                 f"¡Ya puedes empezar a usar el bot! 🚀"
             )
@@ -623,7 +581,7 @@ async def add_permission(client, message):
         
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
-
+        
 @bot.on_message(filters.command("unpermiso"))
 async def remove_permission(client, message):
     if message.from_user.id not in ADM:
@@ -727,33 +685,6 @@ async def handle_message(client, message):
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
         
-    if message.text.startswith('/start'):
-        # Mensaje de bienvenida con botones
-        welcome_message = (
-            "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
-            "Aquí puedes:\n"
-            "📥 Descargar archivos\n"
-            "📤 Subir archivos\n"
-            "📂 Gestionar tus archivos\n\n"
-            "🔰 Para comenzar:\n"
-            "1. Únete a nuestros canales requeridos\n"
-            "2. Verifica tu membresía\n"
-            "3. ¡Empieza a descargar!\n\n"
-            "📚 Usa /help para ver todos los comandos"
-        )
-        
-        # Crear teclado inline con botones
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
-            [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
-        ])
-        
-        # Verificar si el usuario ya está en la base de datos
-        db.add_user(message.from_user.id, message.from_user.username or "")
-        
-        # Enviar el mensaje con los botones
-        await message.reply_text(welcome_message, reply_markup=keyboard)
-         
         await message.reply_text(welcome_message)   
     elif '/wget' in mss:
         try:
@@ -1326,6 +1257,8 @@ async def update_user_storage(user_id, file_size):
             pass
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
+# Al final del archivo, antes de bot.start()
+bot.remove_handler(handle_callback_query)  # Remover cualquier manejador existente
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()  
 try:
