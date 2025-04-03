@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime
+from datetime import timedelta  # Nueva línea añadida
 import json
 
 class Database:
@@ -105,6 +106,7 @@ class Database:
         conn.close()
 
     def set_expiration_date(self, user_id, days):
+    from datetime import timedelta  # Añadir esta línea
         conn = sqlite3.connect(self.db_file)
         c = conn.cursor()
         expiration_date = datetime.now()
