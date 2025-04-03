@@ -727,34 +727,35 @@ async def handle_message(client, message):
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
 
- 
-    if message.text.startswith('/start'):
-    # Mensaje de bienvenida con botones
-    welcome_message = (
-        "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
-        "Aquí puedes:\n"
-        "📥 Descargar archivos\n"
-        "📤 Subir archivos\n"
-        "📂 Gestionar tus archivos\n\n"
-        "🔰 Para comenzar:\n"
-        "1. Únete a nuestros canales requeridos\n"
-        "2. Verifica tu membresía\n"
-        "3. ¡Empieza a descargar!\n\n"
-        "📚 Usa /help para ver todos los comandos"
-    )
-    
-    # Crear teclado inline con botones
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
-        [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
-    ])
-    
-    # Verificar si el usuario ya está en la base de datos
-    db.add_user(message.from_user.id, message.from_user.username or "")
-    
-    # Enviar el mensaje con los botones
-    await message.reply_text(welcome_message, reply_markup=keyboard)
+     if message.text.startswith('/start'):
+        # Mensaje de bienvenida con botones
+        welcome_message = (
+            "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
+            "Aquí puedes:\n"
+            "📥 Descargar archivos\n"
+            "📤 Subir archivos\n"
+            "📂 Gestionar tus archivos\n\n"
+            "🔰 Para comenzar:\n"
+            "1. Únete a nuestros canales requeridos\n"
+            "2. Verifica tu membresía\n"
+            "3. ¡Empieza a descargar!\n\n"
+            "📚 Usa /help para ver todos los comandos"
+        )
+        
+        # Crear teclado inline con botones
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
+            [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
+        ])
+        
+        # Verificar si el usuario ya está en la base de datos
+        db.add_user(message.from_user.id, message.from_user.username or "")
+        
         # Enviar el mensaje con los botones
+        await message.reply_text(welcome_message, reply_markup=keyboard)
+         
+    if message.text.startswith('/start'):
+    
         await message.reply_text(welcome_message)   
     elif '/wget' in mss:
         try:
