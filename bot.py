@@ -48,15 +48,6 @@ import unicodedata
 import openai
 from openai import OpenAI
 
-# Agregar configuración de MySQL
-from config import DB_CONFIG  # Importar la configuración de la base de datos
-
-# Variables de conexión MySQL
-db_host = DB_CONFIG['host']
-db_user = DB_CONFIG['user']
-db_password = DB_CONFIG['password']
-db_name = DB_CONFIG['db']
-
 # Variables globales existentes...
 maintenance_mode = False
 maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
@@ -70,6 +61,15 @@ REQUIRED_CHANNELS = [
     {"title": "Http Custom 🇨🇺", "url": "https://t.me/congelamegas", "id": -1002398990043},
     {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}
 ]
+
+# Agregar configuración de MySQL
+from config import DB_CONFIG  # Importar la configuración de la base de datos
+
+# Variables de conexión MySQL
+db_host = DB_CONFIG['host']
+db_user = DB_CONFIG['user']
+db_password = DB_CONFIG['password']
+db_name = DB_CONFIG['db']
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -86,21 +86,23 @@ bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
+# Modificar alrededor de la línea 78
 async def verify_user_membership(client, user_id):
     """Verifica si el usuario es miembro de todos los canales requeridos."""
     try:
         for channel in REQUIRED_CHANNELS:
             try:
                 member = await client.get_chat_member(channel["id"], user_id)
-                if member.status in ["left", "kicked"]:
+                if member.status not in ["member", "administrator", "creator"]:
                     return False
-            except Exception:
+            except Exception as e:
+                print(f"Error verificando miembro {user_id} en canal {channel['id']}: {e}")
                 return False
         return True
     except Exception as e:
         print(f"Error en verify_user_membership: {e}")
         return False
-
+        
 async def show_join_channels_message(message):
     """Muestra el mensaje con los botones para unirse a los canales."""
     buttons = []
@@ -118,19 +120,40 @@ async def show_join_channels_message(message):
         reply_markup=keyboard
         )
     
+# Modificar alrededor de la línea 106
 async def create_db_connection():
     try:
-        return await aiomysql.connect(
+        connection = await aiomysql.connect(
             host=db_host,
             user=db_user,
             password=db_password,
             db=db_name,
-            port=3306,
+            port=5432,
             autocommit=True
         )
+        return connection
     except Exception as e:
         print(f"Error de conexión a MySQL: {e}")
         return None
+
+# Añadir esta nueva función después de create_db_connection
+async def execute_db_operation(operation):
+    """Función helper para manejar operaciones de base de datos de forma segura"""
+    conn = None
+    try:
+        conn = await create_db_connection()
+        if conn is None:
+            return False, "Error de conexión a la base de datos"
+        
+        async with conn.cursor() as cursor:
+            await operation(cursor)
+            return True, None
+    except Exception as e:
+        print(f"Error en operación de base de datos: {e}")
+        return False, str(e)
+    finally:
+        if conn:
+            conn.close()
 
 async def init_database_tables():
     conn = await create_db_connection()
@@ -328,6 +351,7 @@ def convert_bytes_to_human(size):
     else:
         return f"{size / (1024 * 1024 * 1024):.2f} GB"
 
+# Modificar alrededor de la línea 261
 async def handle_callback_query(client, callback_query):
     user_id = callback_query.from_user.id    
     if callback_query.data == f"cancel_upload_{user_id}":
@@ -339,13 +363,21 @@ async def handle_callback_query(client, callback_query):
         await callback_query.answer("🚫Task canceled🚫")
         return
     elif callback_query.data == "verify_membership":
-        is_member = await verify_user_membership(client, user_id)
-        if is_member:
-            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
-            await callback_query.message.delete()
-        else:
-            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
-
+        try:
+            is_member = await verify_user_membership(client, user_id)
+            if is_member:
+                # Si el usuario está en los canales y tiene permisos, permitir acceso
+                if user_id in user_permissions:
+                    await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
+                    await callback_query.message.delete()
+                else:
+                    await callback_query.answer("❌ No tienes permisos para usar el bot. Contacta al administrador.", show_alert=True)
+            else:
+                await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
+        except Exception as e:
+            print(f"Error en verificación: {e}")
+            await callback_query.answer("❌ Error al verificar. Intenta nuevamente.", show_alert=True)
+            
 def files_formatter(path, username):
     filespath = Path(path)
     result = sorted([p.name for p in filespath.glob("*") if p.is_file()])
@@ -669,6 +701,13 @@ async def disable_maintenance(client, message):
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
     
 @bot.on_message(filters.private)
+        
+        # Verificar si los permisos han expirado
+        if datetime.now() > user_permissions[user_id]["expiry_date"]:
+            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
+            return
+
+@bot.on_message(filters.private)
 async def handle_message(client, message):
     user_id = message.from_user.id
     
@@ -685,30 +724,41 @@ async def handle_message(client, message):
             await show_join_channels_message(message)
             return
     
-    # Permitir siempre al admin
-    if user_id in ADM:  # Cambiado de ADMIN_ID a ADM
-        pass  # Los administradores siempre tienen acceso
-    elif user_id in user_permissions:  # Verificar si el usuario tiene permisos
-        # Verificar si los permisos han expirado
-        if datetime.now() > user_permissions[user_id]["expiry_date"]:
-            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
-            return
-    else:
-        # Usuario sin permisos
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
-        ])
-        await message.reply_text(
-            "⛔️ No tienes permiso para usar este bot.",
-            reply_markup=keyboard
-        )
-        return
+    try:
+        # Verificar permisos del usuario
+        if user_id in ADM:
+            has_permission = True
+        else:
+            async def check_permissions(cursor):
+                await cursor.execute('SELECT expiration_date, storage_quota FROM users WHERE user_id = %s', (user_id,))
+                result = await cursor.fetchone()
+                if result:
+                    expiration_date = result[0]
+                    if expiration_date and datetime.now() > expiration_date:
+                        await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
+                        return False
+                    return True
+                return False
+
+            success, error = await execute_db_operation(check_permissions)
+            if not success:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Obtener Acceso", url="https://t.me/Osvaldo20032")]
+                ])
+                await message.reply_text(
+                    "⛔️ No tienes permiso para usar este bot.",
+                    reply_markup=keyboard
+                )
+                return
         
-        # Verificar si los permisos han expirado
-        if datetime.now() > user_permissions[user_id]["expiry_date"]:
-            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
-            return
-        
+        # Continuar con el procesamiento del mensaje
+        username = message.from_user.username or str(user_id)
+        # ... resto del código de handle_message ...
+
+    except Exception as e:
+        print(f"Error en handle_message: {e}")
+        await message.reply_text("❌ Ocurrió un error. Por favor, intenta nuevamente.")
+
         # Verificar límite de GB (solo para comandos de subida)
         if message.text and message.text.startswith('/up'):
             if user_permissions[user_id]["gb_used"] >= user_permissions[user_id]["gb_limit"]:
