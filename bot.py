@@ -48,17 +48,22 @@ import unicodedata
 import openai
 from openai import OpenAI
 
-# Variables globales
+# Variables globales existentes...
 maintenance_mode = False
 maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
-ADMIN_ID = 1742433244  # ID del administrador principal
-ADM = [1742433244]    # Lista de IDs de administradores
-user_permissions = {}  # Diccionario para almacenar permisos de usuarios
-bot_time = "UTC-5"    # Variable para almacenar la hora del bot
-REQUIRED_CHANNELS = [
-    {"title": "Http Custom 🇨🇺", "url": "https://t.me/congelamegas", "id": -1002398990043},  # Reemplaza con el ID real del canal
-    {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
-]
+ADMIN_ID = 1742433244
+ADM = [1742433244]
+user_permissions = {}
+bot_time = "UTC-5"
+
+# Agregar configuración de MySQL
+from config import DB_CONFIG  # Importar la configuración de la base de datos
+
+# Variables de conexión MySQL
+db_host = DB_CONFIG['host']
+db_user = DB_CONFIG['user']
+db_password = DB_CONFIG['password']
+db_name = DB_CONFIG['db']
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -104,12 +109,67 @@ async def show_join_channels_message(message):
         )
     
 async def create_db_connection():
-    return await aiomysql.connect(host=db_host, port=3306, user=db_user, password=db_password, db=db_name)
+    try:
+        return await aiomysql.connect(
+            host=db_host,
+            user=db_user,
+            password=db_password,
+            db=db_name,
+            port=3306,
+            autocommit=True
+        )
+    except Exception as e:
+        print(f"Error de conexión a MySQL: {e}")
+        return None
+
+async def init_database_tables():
+    conn = await create_db_connection()
+    if conn:
+        try:
+            async with conn.cursor() as cur:
+                # Tabla de usuarios
+                await cur.execute('''
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id BIGINT PRIMARY KEY,
+                        username VARCHAR(255),
+                        join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_verified TIMESTAMP,
+                        permissions TEXT,
+                        storage_used BIGINT DEFAULT 0,
+                        storage_quota BIGINT DEFAULT 0,
+                        expiration_date TIMESTAMP
+                    )
+                ''')
+
+                # Tabla de verificaciones de canales
+                await cur.execute('''
+                    CREATE TABLE IF NOT EXISTS channel_verifications (
+                        user_id BIGINT,
+                        channel_id BIGINT,
+                        verified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, channel_id)
+                    )
+                ''')
+
+                # Tabla de descargas
+                await cur.execute('''
+                    CREATE TABLE IF NOT EXISTS downloads (
+                        user_id BIGINT,
+                        file_path TEXT,
+                        file_size BIGINT,
+                        download_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                await conn.commit()
+        except Exception as e:
+            print(f"Error al inicializar las tablas: {e}")
+        finally:
+            conn.close()
 
 # Cola global de descargas
 download_queue = deque()
 download_in_progress = False
-
 
 # Manejador para la selección de calidad
 @bot.on_callback_query(filters.regex(r"^yt_"))
@@ -499,7 +559,6 @@ async def set_time(client, message):
     except Exception as e:
         await message.reply(f"❌ Error al establecer la hora: {str(e)}")
 
-@bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
     if message.from_user.id not in ADM:
         await message.reply("❌ No tienes permiso para usar este comando.")
@@ -515,38 +574,48 @@ async def add_permission(client, message):
         dias = int(args[2])
         gb_limit = float(args[3].replace("gb", ""))
         
-        # Obtener la hora actual del bot
         current_hour, current_minute = map(int, bot_time.split(':'))
         now = datetime.now()
         current_time = now.replace(hour=current_hour, minute=current_minute)
-        
-        # Calcular la fecha de expiración manteniendo la misma hora
         expiry_date = current_time + timedelta(days=dias)
         
-        user_permissions[user_id] = {
-            "expiry_date": expiry_date,
-            "gb_limit": gb_limit * 1024 * 1024 * 1024,
-            "gb_used": 0
-        }
-        
-        # Mensaje para el administrador
-        await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
-                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                          f"💾 Límite: {gb_limit}GB")
-        
-        # Notificar al usuario
-        try:
-            await bot.send_message(
-                user_id,
-                f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
-                f"📅 Duración: {dias} días\n"
-                f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
-                f"¡Ya puedes empezar a usar el bot! 🚀"
-            )
-        except Exception as e:
-            await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
-        
+        conn = await create_db_connection()
+        if conn:
+            try:
+                async with conn.cursor() as cur:
+                    await cur.execute('''
+                        INSERT INTO users (user_id, storage_quota, expiration_date) 
+                        VALUES (%s, %s, %s)
+                        ON DUPLICATE KEY UPDATE 
+                        storage_quota = %s, 
+                        expiration_date = %s
+                    ''', (
+                        user_id,
+                        gb_limit * 1024 * 1024 * 1024,
+                        expiry_date,
+                        gb_limit * 1024 * 1024 * 1024,
+                        expiry_date
+                    ))
+                    await conn.commit()
+                
+                await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
+                                  f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                                  f"💾 Límite: {gb_limit}GB")
+                
+                try:
+                    await bot.send_message(
+                        user_id,
+                        f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
+                        f"📅 Duración: {dias} días\n"
+                        f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
+                        f"¡Ya puedes empezar a usar el bot! 🚀"
+                    )
+                except Exception as e:
+                    await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
+            finally:
+                conn.close()
+                
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
 
@@ -1221,10 +1290,21 @@ async def disable_maintenance(client, message):
         await message.reply("❌ No tienes permiso para usar este comando.")
         return
         
-        # Añadir aquí la nueva función
 async def update_user_storage(user_id, file_size):
-    if user_id in user_permissions:
-        user_permissions[user_id]["gb_used"] += file_size
+    conn = await create_db_connection()
+    if conn:
+        try:
+            async with conn.cursor() as cur:
+                await cur.execute('''
+                    UPDATE users 
+                    SET storage_used = storage_used + %s 
+                    WHERE user_id = %s
+                ''', (file_size, user_id))
+                await conn.commit()
+        except Exception as e:
+            print(f"Error al actualizar el almacenamiento del usuario: {e}")
+        finally:
+            conn.close()
 
     global maintenance_mode
     maintenance_mode = False
@@ -1236,10 +1316,22 @@ async def update_user_storage(user_id, file_size):
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
-bot.start()  
-try:
-    bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
-except Exception as e:
-    print(f"No se pudo enviar el mensaje inicial: {e}")
-print("Bot Iniciado")
-bot.loop.run_forever()
+
+# Antes del bot.start()
+async def start_bot():
+    # Inicializar la base de datos
+    await init_database_tables()
+    print("Base de datos inicializada")
+    
+    # Iniciar el bot
+    await bot.start()
+    print("Bot iniciado")
+    try:
+        await bot.send_message(1742433244, '**Bot Iniciado presiona /start y disfruta de tu estadía**')
+    except Exception as e:
+        print(f"No se pudo enviar el mensaje inicial: {e}")
+        
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(start_bot())
+    loop.run_forever()
