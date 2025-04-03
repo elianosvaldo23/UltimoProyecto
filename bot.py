@@ -644,7 +644,7 @@ async def disable_maintenance(client, message):
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
  @bot.on_message(filters.private)
- async def handle_message(client, message):
+async def handle_message(client, message):
     user_id = message.from_user.id
     
     # Verificar modo mantenimiento antes de cualquier otra cosa
