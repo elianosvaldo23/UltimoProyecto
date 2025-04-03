@@ -48,14 +48,6 @@ import unicodedata
 import openai
 from openai import OpenAI
 
-# Variables globales existentes...
-maintenance_mode = False
-maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
-ADMIN_ID = 1742433244
-ADM = [1742433244]
-user_permissions = {}
-bot_time = "UTC-5"
-
 # Agregar configuración de MySQL
 from config import DB_CONFIG  # Importar la configuración de la base de datos
 
@@ -64,6 +56,20 @@ db_host = DB_CONFIG['host']
 db_user = DB_CONFIG['user']
 db_password = DB_CONFIG['password']
 db_name = DB_CONFIG['db']
+
+# Variables globales existentes...
+maintenance_mode = False
+maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténtalo más tarde. ⚠️"
+ADMIN_ID = 1742433244
+ADM = [1742433244]
+user_permissions = {}
+bot_time = "UTC-5"
+
+# Definición de canales requeridos - MOVER ESTA SECCIÓN AQUÍ
+REQUIRED_CHANNELS = [
+    {"title": "Http Custom 🇨🇺", "url": "https://t.me/congelamegas", "id": -1002398990043},
+    {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}
+]
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -82,14 +88,18 @@ ADM = [1742433244]
 
 async def verify_user_membership(client, user_id):
     """Verifica si el usuario es miembro de todos los canales requeridos."""
-    for channel in REQUIRED_CHANNELS:
-        try:
-            member = await client.get_chat_member(channel["id"], user_id)
-            if member.status in ["left", "kicked"]:
+    try:
+        for channel in REQUIRED_CHANNELS:
+            try:
+                member = await client.get_chat_member(channel["id"], user_id)
+                if member.status in ["left", "kicked"]:
+                    return False
+            except Exception:
                 return False
-        except Exception:
-            return False
-    return True
+        return True
+    except Exception as e:
+        print(f"Error en verify_user_membership: {e}")
+        return False
 
 async def show_join_channels_message(message):
     """Muestra el mensaje con los botones para unirse a los canales."""
@@ -559,6 +569,7 @@ async def set_time(client, message):
     except Exception as e:
         await message.reply(f"❌ Error al establecer la hora: {str(e)}")
 
+@bot.on_message(filters.command("permiso"))
 async def add_permission(client, message):
     if message.from_user.id not in ADM:
         await message.reply("❌ No tienes permiso para usar este comando.")
@@ -574,48 +585,39 @@ async def add_permission(client, message):
         dias = int(args[2])
         gb_limit = float(args[3].replace("gb", ""))
         
+        # Obtener la hora actual del bot
         current_hour, current_minute = map(int, bot_time.split(':'))
         now = datetime.now()
         current_time = now.replace(hour=current_hour, minute=current_minute)
+        
+        # Calcular la fecha de expiración manteniendo la misma hora
         expiry_date = current_time + timedelta(days=dias)
         
-        conn = await create_db_connection()
-        if conn:
-            try:
-                async with conn.cursor() as cur:
-                    await cur.execute('''
-                        INSERT INTO users (user_id, storage_quota, expiration_date) 
-                        VALUES (%s, %s, %s)
-                        ON DUPLICATE KEY UPDATE 
-                        storage_quota = %s, 
-                        expiration_date = %s
-                    ''', (
-                        user_id,
-                        gb_limit * 1024 * 1024 * 1024,
-                        expiry_date,
-                        gb_limit * 1024 * 1024 * 1024,
-                        expiry_date
-                    ))
-                    await conn.commit()
-                
-                await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
-                                  f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                                  f"💾 Límite: {gb_limit}GB")
-                
-                try:
-                    await bot.send_message(
-                        user_id,
-                        f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
-                        f"📅 Duración: {dias} días\n"
-                        f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
-                        f"¡Ya puedes empezar a usar el bot! 🚀"
-                    )
-                except Exception as e:
-                    await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
-            finally:
-                conn.close()
-                
+        # Actualizar los permisos del usuario
+        user_permissions[user_id] = {
+            "expiry_date": expiry_date,
+            "gb_limit": gb_limit * 1024 * 1024 * 1024,
+            "gb_used": 0
+        }
+        
+        # Mensaje para el administrador
+        await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
+                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                          f"💾 Límite: {gb_limit}GB")
+        
+        # Notificar al usuario
+        try:
+            await client.send_message(
+                user_id,
+                f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
+                f"📅 Duración: {dias} días\n"
+                f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
+                f"¡Ya puedes empezar a usar el bot! 🚀"
+            )
+        except Exception as e:
+            await message.reply(f"⚠️ No se pudo notificar al usuario: {str(e)}")
+        
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
 
