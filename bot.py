@@ -47,8 +47,6 @@ from pyrogram.handlers import CallbackQueryHandler
 import unicodedata
 import openai
 from openai import OpenAI
-import sqlite3
-from database import Database
 
 # Variables globales
 maintenance_mode = False
@@ -56,60 +54,11 @@ maintenance_message = "⚠️ El bot está en mantenimiento. Por favor, inténta
 ADMIN_ID = 1742433244  # ID del administrador principal
 ADM = [1742433244]    # Lista de IDs de administradores
 user_permissions = {}  # Diccionario para almacenar permisos de usuarios
-bot_time = "00:00"    # Variable para almacenar la hora del bot
-db = Database()
+bot_time = "UTC-5"    # Variable para almacenar la hora del bot
 REQUIRED_CHANNELS = [
     {"title": "Http Custom 🇨🇺", "url": "https://t.me/congelamegas", "id": -1002398990043},  # Reemplaza con el ID real del canal
     {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
 ]
-
-def get_channels_keyboard(channel_titles):
-    buttons = []
-    for channel in REQUIRED_CHANNELS:
-        if channel["title"] in channel_titles:
-            buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
-    buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
-    return InlineKeyboardMarkup(buttons)
-    
-async def verify_user_membership(client, user_id):
-    """Verifica si un usuario es miembro de todos los canales requeridos."""
-    is_member = True
-    for channel in REQUIRED_CHANNELS:
-        try:
-            member = await client.get_chat_member(channel["id"], user_id)
-            if member.status not in ["member", "administrator", "creator"]:
-                is_member = False
-                break
-        except Exception:
-            is_member = False
-            break
-    return is_member
-
-async def show_join_channels_message(message):
-    """Muestra el mensaje para unirse a los canales requeridos."""
-    channels_text = "\n".join([f"- {channel['title']}" for channel in REQUIRED_CHANNELS])
-    
-    text = (
-        "❗️ Para usar el bot, debes unirte a nuestros canales:\n\n"
-        f"{channels_text}\n\n"
-        "1️⃣ Únete a los canales usando los botones de abajo\n"
-        "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido"
-    )
-    
-    keyboard = get_channels_keyboard([channel['title'] for channel in REQUIRED_CHANNELS])
-    await message.reply_text(text, reply_markup=keyboard)
-    
-def load_user_data():
-    conn = sqlite3.connect(db.db_file)
-    c = conn.cursor()
-    c.execute('SELECT user_id, permissions FROM users')
-    for user_id, permissions in c.fetchall():
-        if permissions:
-            user_permissions[user_id] = json.loads(permissions)
-    conn.close()
-
-# Cargar datos al inicio
-load_user_data()
 
 # BoT Configuration Variables
 api_id = 13876032
@@ -126,50 +75,41 @@ bot = Client("bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 USERS = ["elianosvaldo23"]
 ADM = [1742433244] 
 
-async def handle_callback_query(client, callback_query):
-    user_id = callback_query.from_user.id    
-    
-    if callback_query.data == "verify_membership":
-        # Verificar acceso del usuario
-        access_ok, access_msg = db.check_user_access(user_id)
-        if not access_ok:
-            await callback_query.answer(f"❌ {access_msg}", show_alert=True)
-            return
+async def verify_user_membership(client, user_id):
+    """Verifica si el usuario es miembro de todos los canales requeridos."""
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await client.get_chat_member(channel["id"], user_id)
+            if member.status in ["left", "kicked"]:
+                return False
+        except Exception:
+            return False
+    return True
 
-        is_member = await verify_user_membership(client, user_id)
-        if is_member:
-            for channel in REQUIRED_CHANNELS:
-                db.update_channel_verification(user_id, channel["id"])
-            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
-            await callback_query.message.delete()
-        else:
-            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
-            missing_channels = []
-            for channel in REQUIRED_CHANNELS:
-                try:
-                    member = await client.get_chat_member(channel["id"], user_id)
-                    if member.status not in ["member", "administrator", "creator"]:
-                        missing_channels.append(channel["title"])
-                except:
-                    missing_channels.append(channel["title"])
-            
-            if missing_channels:
-                channels_text = "\n- ".join(missing_channels)
-                await callback_query.message.edit_text(
-                    f"❗️ Aún faltan canales por unirte:\n\n"
-                    f"Canales faltantes:\n- {channels_text}\n\n"
-                    "1️⃣ Únete a los canales usando los botones de abajo\n"
-                    "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido",
-                    reply_markup=get_channels_keyboard(missing_channels)
-                )
+async def show_join_channels_message(message):
+    """Muestra el mensaje con los botones para unirse a los canales."""
+    buttons = []
+    for channel in REQUIRED_CHANNELS:
+        buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
     
-    elif callback_query.data.startswith("cancel_upload_"):
-        cancel_uploads[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
+    buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
     
-    elif callback_query.data.startswith("cancel_uploa_"):
-        cancel_upload[user_id] = True
-        await callback_query.answer("🚫Task canceled🚫")
+    keyboard = InlineKeyboardMarkup(buttons)
+    
+    await message.reply(
+        "❗️ Para usar el bot, debes unirte a nuestros canales oficiales:\n\n"
+        "1️⃣ Únete a los canales presionando los botones de abajo\n"
+        "2️⃣ Presiona 'Verificar ✅' cuando te hayas unido\n",
+        reply_markup=keyboard
+        )
+    
+async def create_db_connection():
+    return await aiomysql.connect(host=db_host, port=3306, user=db_user, password=db_password, db=db_name)
+
+# Cola global de descargas
+download_queue = deque()
+download_in_progress = False
+
 
 # Manejador para la selección de calidad
 @bot.on_callback_query(filters.regex(r"^yt_"))
@@ -277,6 +217,18 @@ async def download_from_url(msg, client: Client, message: Message, url: str, use
         await message.reply(f"**Error:** {str(e)}")
         return
 
+# Manejador para enlaces directos
+async def progress_callback(current, total, message, start_time):
+    """Función de callback para mostrael progreso de subida."""
+    global seg
+    now = time()
+    user_id = message.chat.id
+    diff = now - start_time
+    if diff == 0:
+        return
+    if user_id in cancel_uploads and cancel_uploads[user_id]:  # Verifica si el usuario canceló
+        await message.edit("**🚫  Subida cancelada  🚫**")
+        return
     speed = current / diff
     percent = current * 100 / total
     speed_human = convert_bytes_to_human(speed)
@@ -305,6 +257,24 @@ def convert_bytes_to_human(size):
         return f"{size / (1024 * 1024):.2f} MB"
     else:
         return f"{size / (1024 * 1024 * 1024):.2f} GB"
+
+async def handle_callback_query(client, callback_query):
+    user_id = callback_query.from_user.id    
+    if callback_query.data == f"cancel_upload_{user_id}":
+        cancel_uploads[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
+        return
+    elif callback_query.data == f"cancel_uploa_{user_id}":
+        cancel_upload[user_id] = True
+        await callback_query.answer("🚫Task canceled🚫")
+        return
+    elif callback_query.data == "verify_membership":
+        is_member = await verify_user_membership(client, user_id)
+        if is_member:
+            await callback_query.answer("✅ ¡Verificación exitosa! Ya puedes usar el bot.")
+            await callback_query.message.delete()
+        else:
+            await callback_query.answer("❌ Debes unirte a todos los canales para usar el bot.", show_alert=True)
 
 def files_formatter(path, username):
     filespath = Path(path)
@@ -432,6 +402,7 @@ async def downloadmessage_progres(chunk, filesize, filename, start, message):
         except:pass
     seg = localtime().tm_sec
 
+  
 async def process_download(client: Client, message: Message, username: str, send):
     user_id = message.chat.id
     msg = await send("Verificando Archivo ", quote=True)
@@ -447,12 +418,6 @@ async def process_download(client: Client, message: Message, username: str, send
             if match:
                 filename = match.group(1)  # Obtener el nombre del archivo
             filename = limpiar_texto(filename)
-            
-            # Verificar límite de subida a la nube
-            if filesize > user_permissions.get(user_id, {}).get("upload_limit", float('inf')):
-                await message.reply("❌ El archivo excede tu límite de subida permitido.")
-                return
-                
         except Exception as e:
             filename = str(randint(11111, 999999)) + ".mp4"
             filesize = 0  # Tamaño desconocido
@@ -482,6 +447,7 @@ async def process_download(client: Client, message: Message, username: str, send
         
     msgg = files_formatter(str(root[username]["actual_root"]), username)
     await limite_msg(msgg[0], username)
+
 
 @bot.on_message(filters.media & filters.private)
 async def down_media(client: Client, message: Message):
@@ -547,32 +513,26 @@ async def add_permission(client, message):
         
         user_id = int(args[1])
         dias = int(args[2])
-        gb_limit = float(args[3])
+        gb_limit = float(args[3].replace("gb", ""))
         
-        # Primero verificar si el usuario existe en la base de datos
-        db.add_user(user_id, "")  # Asegurarse de que el usuario exista en la base de datos
+        # Obtener la hora actual del bot
+        current_hour, current_minute = map(int, bot_time.split(':'))
+        now = datetime.now()
+        current_time = now.replace(hour=current_hour, minute=current_minute)
         
-        # Establecer cuota y fecha de expiración
-        db.set_user_quota(user_id, gb_limit)
-        db.set_expiration_date(user_id, dias)
+        # Calcular la fecha de expiración manteniendo la misma hora
+        expiry_date = current_time + timedelta(days=dias)
         
-        # Obtener la fecha de expiración
-        conn = sqlite3.connect(db.db_file)
-        c = conn.cursor()
-        c.execute('SELECT expiration_date FROM users WHERE user_id = ?', (user_id,))
-        result = c.fetchone()
-        conn.close()
-        
-        if not result:
-            await message.reply("❌ Error: No se pudo establecer la fecha de expiración")
-            return
-            
-        expiry_date = result[0]
+        user_permissions[user_id] = {
+            "expiry_date": expiry_date,
+            "gb_limit": gb_limit * 1024 * 1024 * 1024,
+            "gb_used": 0
+        }
         
         # Mensaje para el administrador
         await message.reply(f"✅ Permisos añadidos para el usuario {user_id}:\n"
-                         f"📅 Expira: {expiry_date}\n"
-                         f"💾 Límite: {gb_limit}GB")
+                          f"📅 Expira: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                          f"💾 Límite: {gb_limit}GB")
         
         # Notificar al usuario
         try:
@@ -580,7 +540,7 @@ async def add_permission(client, message):
                 user_id,
                 f"🎉 ¡Felicitaciones! Se te han otorgado permisos en el bot:\n\n"
                 f"📅 Duración: {dias} días\n"
-                f"📆 Fecha de expiración: {expiry_date}\n"
+                f"📆 Fecha de expiración: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"💾 Límite de almacenamiento: {gb_limit}GB\n\n"
                 f"¡Ya puedes empezar a usar el bot! 🚀"
             )
@@ -589,7 +549,7 @@ async def add_permission(client, message):
         
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
-        
+
 @bot.on_message(filters.command("unpermiso"))
 async def remove_permission(client, message):
     if message.from_user.id not in ADM:
@@ -614,7 +574,7 @@ async def remove_permission(client, message):
     except Exception as e:
         await message.reply(f"❌ Error: {str(e)}")
         
-# Añadir estas funciones después de la definición de `handle_message` (aproximadamente en la línea 494)
+
 @bot.on_message(filters.command("mant") & filters.user(ADM))
 async def enable_maintenance(client, message):
     global maintenance_mode
@@ -636,7 +596,7 @@ async def disable_maintenance(client, message):
         except Exception:
             pass
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
-
+    
 @bot.on_message(filters.private)
 async def handle_message(client, message):
     user_id = message.from_user.id
@@ -672,7 +632,7 @@ async def handle_message(client, message):
             reply_markup=keyboard
         )
         return
-
+        
         # Verificar si los permisos han expirado
         if datetime.now() > user_permissions[user_id]["expiry_date"]:
             await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
@@ -692,29 +652,16 @@ async def handle_message(client, message):
         downlist[username] = []
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
-        
-        if message.text.startswith('/start'):
+
+
+    if message.text.startswith('/start'):
+        # Mensaje de bienvenida con botones
         welcome_message = (
-            "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
-            "Aquí puedes:\n"
-            "📥 Descargar archivos\n"
-            "📤 Subir archivos\n"
-            "📂 Gestionar tus archivos\n\n"
-            "🔰 Para comenzar:\n"
-            "1. Únete a nuestros canales requeridos\n"
-            "2. Verifica tu membresía\n"
-            "3. ¡Empieza a descargar!\n\n"
-            "📚 Usa /help para ver todos los comandos"
+            "¡Bienvenido al bot de descargas!\n\n"
+            "Aquí puedes descargar y subir archivos de manera gratuita.\n\n"
         )
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
-            [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
-        ])
-        
-        db.add_user(message.from_user.id, message.from_user.username or "")
-        await message.reply_text(welcome_message, reply_markup=keyboard)
-        
+        # Enviar el mensaje con los botones
+        await message.reply_text(welcome_message)   
     elif '/wget' in mss:
         try:
             list = message.text.split(" ")[1]
@@ -761,6 +708,8 @@ async def handle_message(client, message):
             await message.reply(f"El directorio de descargas ha sido eliminado. \n\nAhora tienes {sizeof_fmt(0)} de uso")  # Notificar al usuario
         except Exception as e:
             await message.reply(f"Error al eliminar el directorio: {e}")
+
+
 
     elif "youtube.com" in mss:
         url = message.text # Obtener la URL del video de YouTube
@@ -1286,8 +1235,6 @@ async def update_user_storage(user_id, file_size):
             pass
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
 
-# Al final del archivo, antes de bot.start()
-bot.remove_handler(handle_callback_query)  # Remover cualquier manejador existente
 bot.add_handler(CallbackQueryHandler(handle_callback_query))
 bot.start()  
 try:
