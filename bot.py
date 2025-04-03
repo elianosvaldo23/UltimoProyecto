@@ -693,7 +693,7 @@ async def handle_message(client, message):
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
         
-    if message.text.startswith('/start'):
+        if message.text.startswith('/start'):
         welcome_message = (
             "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
             "Aquí puedes:\n"
@@ -705,16 +705,16 @@ async def handle_message(client, message):
             "2. Verifica tu membresía\n"
             "3. ¡Empieza a descargar!\n\n"
             "📚 Usa /help para ver todos los comandos"
-    )
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
-        [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
-    ])
-    
-    db.add_user(message.from_user.id, message.from_user.username or "")
-    await message.reply_text(welcome_message, reply_markup=keyboard)
-    
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
+            [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
+        ])
+        
+        db.add_user(message.from_user.id, message.from_user.username or "")
+        await message.reply_text(welcome_message, reply_markup=keyboard)
+        
     elif '/wget' in mss:
         try:
             list = message.text.split(" ")[1]
