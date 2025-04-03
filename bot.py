@@ -726,8 +726,8 @@ async def handle_message(client, message):
         downlist[username] = []
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
-
-     if message.text.startswith('/start'):
+        
+    if message.text.startswith('/start'):
         # Mensaje de bienvenida con botones
         welcome_message = (
             "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
@@ -754,8 +754,6 @@ async def handle_message(client, message):
         # Enviar el mensaje con los botones
         await message.reply_text(welcome_message, reply_markup=keyboard)
          
-    if message.text.startswith('/start'):
-    
         await message.reply_text(welcome_message)   
     elif '/wget' in mss:
         try:
