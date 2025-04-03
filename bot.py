@@ -63,6 +63,14 @@ REQUIRED_CHANNELS = [
     {"title": "Canal Principal 🇨🇺", "url": "https://t.me/DescargasinConsumirMegas", "id": -1002534252574}  # Reemplaza con el ID real del canal
 ]
 
+def get_channels_keyboard(channel_titles):
+    buttons = []
+    for channel in REQUIRED_CHANNELS:
+        if channel["title"] in channel_titles:
+            buttons.append([InlineKeyboardButton(channel["title"], url=channel["url"])])
+    buttons.append([InlineKeyboardButton("Verificar ✅", callback_data="verify_membership")])
+    return InlineKeyboardMarkup(buttons)
+    
 async def verify_user_membership(client, user_id):
     """Verifica si un usuario es miembro de todos los canales requeridos."""
     is_member = True
@@ -685,7 +693,28 @@ async def handle_message(client, message):
     if username not in root:
         root[username] = {"actual_root": f"downloads/{username}"}
         
-        await message.reply_text(welcome_message)   
+    if message.text.startswith('/start'):
+    welcome_message = (
+        "🤖 ¡Bienvenido al Bot de Descargas! 🚀\n\n"
+        "Aquí puedes:\n"
+        "📥 Descargar archivos\n"
+        "📤 Subir archivos\n"
+        "📂 Gestionar tus archivos\n\n"
+        "🔰 Para comenzar:\n"
+        "1. Únete a nuestros canales requeridos\n"
+        "2. Verifica tu membresía\n"
+        "3. ¡Empieza a descargar!\n\n"
+        "📚 Usa /help para ver todos los comandos"
+    )
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Verificar Membresía ✅", callback_data="verify_membership")],
+        [InlineKeyboardButton("Ayuda 📚", callback_data="help")]
+    ])
+    
+    db.add_user(message.from_user.id, message.from_user.username or "")
+    await message.reply_text(welcome_message, reply_markup=keyboard)
+    
     elif '/wget' in mss:
         try:
             list = message.text.split(" ")[1]
