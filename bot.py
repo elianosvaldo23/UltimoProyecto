@@ -699,13 +699,6 @@ async def disable_maintenance(client, message):
         except Exception:
             pass
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
-    
-@bot.on_message(filters.private)
-        
-        # Verificar si los permisos han expirado
-        if datetime.now() > user_permissions[user_id]["expiry_date"]:
-            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
-            return
 
 @bot.on_message(filters.private)
 async def handle_message(client, message):
@@ -758,6 +751,11 @@ async def handle_message(client, message):
     except Exception as e:
         print(f"Error en handle_message: {e}")
         await message.reply_text("❌ Ocurrió un error. Por favor, intenta nuevamente.")
+
+        # Verificar si los permisos han expirado
+        if datetime.now() > user_permissions[user_id]["expiry_date"]:
+            await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
+            return
 
         # Verificar límite de GB (solo para comandos de subida)
         if message.text and message.text.startswith('/up'):
