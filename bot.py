@@ -97,7 +97,7 @@ async def verify_user_membership(client, user_id):
         # Primero verificar en la base de datos
         if db.is_user_verified(user_id, channel["id"]):
             continue
-            
+
         try:
             member = await client.get_chat_member(channel["id"], user_id)
             if member.status in ["member", "administrator", "creator"]:
@@ -106,7 +106,8 @@ async def verify_user_membership(client, user_id):
             else:
                 all_verified = False
                 break
-        except Exception:
+        except Exception as e:
+            print(f"Error verificando el canal {channel['title']}: {e}")
             all_verified = False
             break
     return all_verified
@@ -641,9 +642,9 @@ async def disable_maintenance(client, message):
         except Exception:
             pass
     await message.reply("🔧 El bot ha salido del modo mantenimiento.")
-    
-@bot.on_message(filters.private)
-async def handle_message(client, message):
+
+ @bot.on_message(filters.private)
+ async def handle_message(client, message):
     user_id = message.from_user.id
     
     # Verificar modo mantenimiento antes de cualquier otra cosa
@@ -677,7 +678,7 @@ async def handle_message(client, message):
             reply_markup=keyboard
         )
         return
-        
+
         # Verificar si los permisos han expirado
         if datetime.now() > user_permissions[user_id]["expiry_date"]:
             await message.reply_text("⚠️ Tu tiempo de acceso ha expirado.")
