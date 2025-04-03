@@ -12,7 +12,7 @@ class Database:
         c = conn.cursor()
         
         # Tabla para usuarios y sus estados
-                c.execute('''CREATE TABLE IF NOT EXISTS users
+        c.execute('''CREATE TABLE IF NOT EXISTS users
                     (user_id INTEGER PRIMARY KEY,
                      username TEXT,
                      join_date TIMESTAMP,
